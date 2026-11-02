@@ -7,6 +7,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v0.0.0-dev' }}
+
 jobs:
   build:
     strategy:
@@ -70,9 +73,17 @@ jobs:
             ditto -c -k --keepParent VST3/FlatQ.vst3 ../../../dist/FlatQ-VST3-macOS.zip
             ditto -c -k --keepParent AU/FlatQ.component ../../../dist/FlatQ-AU-macOS.zip
             ditto -c -k --keepParent Standalone/FlatQ.app ../../../dist/FlatQ-Standalone-macOS.zip
+            cd ../../..
+            installers/macos/build-pkg.sh "$VERSION"
+            cd build/FlatQ_artefacts/Release
           elif [ "$RUNNER_OS" = Windows ]; then
             7z a ../../../dist/FlatQ-VST3-Windows.zip VST3/FlatQ.vst3
             7z a ../../../dist/FlatQ-Standalone-Windows.zip Standalone/FlatQ.exe
+            cd ../../..
+            ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+            [ -x "$ISCC" ] || { choco install innosetup -y --no-progress; }
+            "$ISCC" "//DAppVersion=${VERSION#v}" installers/windows/flatq.iss
+            cd build/FlatQ_artefacts/Release
           else
             zip -r ../../../dist/FlatQ-VST3-Linux.zip VST3/FlatQ.vst3
             zip -r ../../../dist/FlatQ-Standalone-Linux.zip Standalone/FlatQ
@@ -81,4 +92,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: FlatQ-${{ matrix.name }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.pkg
+            dist/*.exe
