@@ -2,10 +2,10 @@
 #include "PluginEditor.h"
 #include <BinaryData.h>
 
-class FreeQProcessor::DesignThread : public juce::Thread
+class FlatQProcessor::DesignThread : public juce::Thread
 {
 public:
-    explicit DesignThread (FreeQProcessor& o) : juce::Thread ("FreeQ design"), owner (o) {}
+    explicit DesignThread (FlatQProcessor& o) : juce::Thread ("FlatQ design"), owner (o) {}
     void run() override
     {
         while (! threadShouldExit())
@@ -16,11 +16,11 @@ public:
     }
     void request() { dirty = true; notify(); }
 private:
-    FreeQProcessor& owner;
+    FlatQProcessor& owner;
     std::atomic<bool> dirty { false };
 };
 
-juce::AudioProcessorValueTreeState::ParameterLayout FreeQProcessor::createLayout()
+juce::AudioProcessorValueTreeState::ParameterLayout FlatQProcessor::createLayout()
 {
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout l;
@@ -29,6 +29,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout FreeQProcessor::createLayout
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "taps", 1 }, "FIR length",
            StringArray { "4096", "8192", "16384" }, 2));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "clamp", 1 }, "Respect max boost", true));
+    l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "maxboost", 1 }, "Max boost",
+           NormalisableRange<float> (0.f, 30.f, 0.5f), 12.f));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "autopreamp", 1 }, "Auto preamp", true));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypass", 1 }, "Bypass", false));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypassexport", 1 }, "Skip on export (offline render)", true));
@@ -37,34 +39,34 @@ juce::AudioProcessorValueTreeState::ParameterLayout FreeQProcessor::createLayout
     return l;
 }
 
-FreeQProcessor::FreeQProcessor()
+FlatQProcessor::FlatQProcessor()
     : AudioProcessor (BusesProperties().withInput ("Input", juce::AudioChannelSet::stereo(), true)
                                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "STATE", createLayout())
 {
     for (auto& b : dryBuf) b.assign (kMaxLatency, 0.0f);
-    for (auto* id : { "mode", "taps", "clamp", "autopreamp" }) apvts.addParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "clamp", "maxboost", "autopreamp" }) apvts.addParameterListener (id, this);
     designThread = std::make_unique<DesignThread> (*this);
     designThread->startThread();
 }
 
-FreeQProcessor::~FreeQProcessor()
+FlatQProcessor::~FlatQProcessor()
 {
-    for (auto* id : { "mode", "taps", "clamp", "autopreamp" }) apvts.removeParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "clamp", "maxboost", "autopreamp" }) apvts.removeParameterListener (id, this);
     designThread->stopThread (5000);
 }
 
-bool FreeQProcessor::isBusesLayoutSupported (const BusesLayout& l) const
+bool FlatQProcessor::isBusesLayoutSupported (const BusesLayout& l) const
 {
     return l.getMainOutputChannelSet() == l.getMainInputChannelSet()
         && (l.getMainOutputChannelSet() == juce::AudioChannelSet::stereo()
          || l.getMainOutputChannelSet() == juce::AudioChannelSet::mono());
 }
 
-void FreeQProcessor::parameterChanged (const juce::String&, float) { requestRedesign(); }
-void FreeQProcessor::requestRedesign() { if (designThread) designThread->request(); }
+void FlatQProcessor::parameterChanged (const juce::String&, float) { requestRedesign(); }
+void FlatQProcessor::requestRedesign() { if (designThread) designThread->request(); }
 
-void FreeQProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void FlatQProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     sampleRateAtomic = sampleRate;
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 2 };
@@ -75,7 +77,7 @@ void FreeQProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     requestRedesign();
 }
 
-bool FreeQProcessor::setProfile (std::shared_ptr<const freeq::Profile> p, const juce::String& path, int builtIn)
+bool FlatQProcessor::setProfile (std::shared_ptr<const flatq::Profile> p, const juce::String& path, int builtIn)
 {
     {
         juce::SpinLock::ScopedLockType sl (profileLock);
@@ -87,76 +89,77 @@ bool FreeQProcessor::setProfile (std::shared_ptr<const freeq::Profile> p, const 
     return true;
 }
 
-bool FreeQProcessor::loadProfile (const juce::File& file, juce::String& error)
+bool FlatQProcessor::loadProfile (const juce::File& file, juce::String& error)
 {
     std::string err;
-    auto p = freeq::Profile::load (file.getFullPathName().toStdString(), &err);
+    auto p = flatq::Profile::load (file.getFullPathName().toStdString(), &err);
     if (! p) { error = err; return false; }
     return setProfile (p, file.getFullPathName(), -1);
 }
 
-int FreeQProcessor::numBuiltInProfiles() { return BinaryData::namedResourceListSize; }
+int FlatQProcessor::numBuiltInProfiles() { return BinaryData::namedResourceListSize; }
 
-juce::String FreeQProcessor::builtInProfileName (int i)
+juce::String FlatQProcessor::builtInProfileName (int i)
 {
     if (i < 0 || i >= numBuiltInProfiles()) return {};
     return juce::File (BinaryData::getNamedResourceOriginalFilename (BinaryData::namedResourceList[i])).getFileNameWithoutExtension();
 }
 
-bool FreeQProcessor::loadBuiltInProfile (int i, juce::String& error)
+bool FlatQProcessor::loadBuiltInProfile (int i, juce::String& error)
 {
     if (i < 0 || i >= numBuiltInProfiles()) { error = "no such built-in profile"; return false; }
     int size = 0;
     const char* res = BinaryData::namedResourceList[i];
     const char* data = BinaryData::getNamedResource (res, size);
     std::string err;
-    auto p = freeq::Profile::loadFromMemory (data, (size_t) size, BinaryData::getNamedResourceOriginalFilename (res), &err);
+    auto p = flatq::Profile::loadFromMemory (data, (size_t) size, BinaryData::getNamedResourceOriginalFilename (res), &err);
     if (! p) { error = err; return false; }
     return setProfile (p, {}, i);
 }
 
-juce::String FreeQProcessor::describeProfile() const
+juce::String FlatQProcessor::describeProfile() const
 {
     juce::SpinLock::ScopedLockType sl (graphLock);
     return graph.name.isEmpty() ? juce::String ("No profile loaded") : graph.name;
 }
 
-void FreeQProcessor::redesign()
+void FlatQProcessor::redesign()
 {
-    std::shared_ptr<const freeq::Profile> p;
+    std::shared_ptr<const flatq::Profile> p;
     { juce::SpinLock::ScopedLockType sl (profileLock); p = profile; }
     if (! p) return;
 
-    freeq::DesignOptions opt;
+    flatq::DesignOptions opt;
     opt.clampToMaxBoost = apvts.getRawParameterValue ("clamp")->load() > 0.5f;
+    opt.maxBoostDb      = apvts.getRawParameterValue ("maxboost")->load();
     opt.autoPreamp      = apvts.getRawParameterValue ("autopreamp")->load() > 0.5f;
     const double fs = sampleRateAtomic.load();
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
-    const double pre = freeq::preampDb (*p, opt);
+    const double pre = flatq::preampDb (*p, opt);
     const int nResp = p->channels();                 // 1 = same response on both channels
     auto src = [nResp] (int c) { return juce::jmin (c, nResp - 1); };
 
     GraphData g;
     g.name = juce::String (p->name) + (nResp > 1 ? "  (independent L/R)" : "");
-    g.hasCeiling = p->hasCeiling() && opt.clampToMaxBoost;
+    g.hasCeiling = opt.clampToMaxBoost;
     g.perChannel = nResp > 1;
     g.preampDb = pre;
     for (int i = 0; i < 256; ++i)
     {
         const double f = 20.0 * std::pow (1000.0, i / 255.0);
         g.freqs.push_back ((float) f);
-        if (g.hasCeiling) g.ceiling.push_back ((float) (p->ceilingDb (f) + pre));
-        for (int c = 0; c < 2; ++c) g.target[(size_t) c].push_back ((float) (freeq::targetDb (*p, src (c), f, opt) + pre + p->channelGainDb (src (c))));
+        if (g.hasCeiling) g.ceiling.push_back ((float) (std::min (p->ceilingDb (f), opt.maxBoostDb) + pre));
+        for (int c = 0; c < 2; ++c) g.target[(size_t) c].push_back ((float) (flatq::targetDb (*p, src (c), f, opt) + pre));
     }
 
     if (mode == LowLatency)
     {
-        freeq::IirDesign d[2];
-        for (int c = 0; c < 2; ++c) d[c] = (c > 0 && nResp == 1) ? d[0] : freeq::designLowLatency (*p, src (c), fs, pre, opt);
+        flatq::IirDesign d[2];
+        for (int c = 0; c < 2; ++c) d[c] = (c > 0 && nResp == 1) ? d[0] : flatq::designLowLatency (*p, src (c), fs, pre, opt);
         for (int c = 0; c < 2; ++c)
             for (float f : g.freqs)
             {
-                double r = 0; for (auto& b : d[c].sections) r += freeq::biquadDb (b, fs, f);
+                double r = 0; for (auto& b : d[c].sections) r += flatq::biquadDb (b, fs, f);
                 g.actual[(size_t) c].push_back ((float) r);
             }
         g.maxErrDb = juce::jmax (d[0].maxErrDb, d[1].maxErrDb);
@@ -183,7 +186,7 @@ void FreeQProcessor::redesign()
         juce::AudioBuffer<float> ir (2, taps);
         for (int c = 0; c < 2; ++c)
         {
-            auto h = freeq::designLinearPhase (*p, src (c), fs, taps, pre + p->channelGainDb (src (c)), opt);
+            auto h = flatq::designLinearPhase (*p, src (c), fs, taps, pre, opt);
             ir.copyFrom (c, 0, h.data(), taps);
             for (float f : g.freqs)       // actual response = DFT of the taps
             {
@@ -203,7 +206,7 @@ void FreeQProcessor::redesign()
     ++graphVersion;
 }
 
-void FreeQProcessor::processDry (juce::AudioBuffer<float>& buffer)
+void FlatQProcessor::processDry (juce::AudioBuffer<float>& buffer)
 {
     const int len = juce::jmin (latencyNow.load(), kMaxLatency);
     if (len <= 0) return;
@@ -221,7 +224,7 @@ void FreeQProcessor::processDry (juce::AudioBuffer<float>& buffer)
     }
 }
 
-void FreeQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
@@ -281,7 +284,7 @@ void FreeQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         buffer.applyGain (0, n, outGain.getTargetValue());
 }
 
-void FreeQProcessor::getStateInformation (juce::MemoryBlock& dest)
+void FlatQProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
     auto state = apvts.copyState();
     state.setProperty ("profilePath", profilePath, nullptr);
@@ -289,7 +292,7 @@ void FreeQProcessor::getStateInformation (juce::MemoryBlock& dest)
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, dest);
 }
 
-void FreeQProcessor::setStateInformation (const void* data, int size)
+void FlatQProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
     {
@@ -311,5 +314,5 @@ void FreeQProcessor::setStateInformation (const void* data, int size)
     }
 }
 
-juce::AudioProcessorEditor* FreeQProcessor::createEditor() { return new FreeQEditor (*this); }
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new FreeQProcessor(); }
+juce::AudioProcessorEditor* FlatQProcessor::createEditor() { return new FlatQEditor (*this); }
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new FlatQProcessor(); }

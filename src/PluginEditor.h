@@ -11,26 +11,26 @@ private:
     GraphData data;
 };
 
-class FreeQEditor : public juce::AudioProcessorEditor, private juce::Timer
+class FlatQEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
-    explicit FreeQEditor (FreeQProcessor&);
+    explicit FlatQEditor (FlatQProcessor&);
     void resized() override;
     void paint (juce::Graphics&) override;
 private:
     void timerCallback() override;
-    FreeQProcessor& proc;
+    FlatQProcessor& proc;
     ResponseGraph graph;
     int lastVersion = -1;
     juce::TextButton loadButton { "Load file..." };
     juce::Label info, stats;
     juce::ComboBox presets, mode, taps;
     juce::ToggleButton clamp { "Respect max boost" }, autoPre { "Auto preamp" }, bypass { "Bypass" }, bypassExport { "Skip on export" };
-    juce::Slider trim { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
-    juce::Label modeL { {}, "Mode" }, tapsL { {}, "FIR length" }, trimL { {}, "Output trim (dB)" };
+    juce::Slider trim { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight }, maxBoost { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Label modeL { {}, "Mode" }, tapsL { {}, "FIR length" }, trimL { {}, "Output trim (dB)" }, maxBoostL { {}, "Max boost (dB)" };
     std::unique_ptr<juce::FileChooser> chooser;
     using CA = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<CA> modeA, tapsA; std::unique_ptr<BA> clampA, preA, bypassA, bypassExportA; std::unique_ptr<SA> trimA;
+    std::unique_ptr<CA> modeA, tapsA; std::unique_ptr<BA> clampA, preA, bypassA, bypassExportA; std::unique_ptr<SA> trimA, maxBoostA;
 };

@@ -6,10 +6,11 @@
 #include <algorithm>
 #include <complex>
 
-namespace freeq {
+namespace flatq {
 
 struct DesignOptions {
-    bool   clampToMaxBoost = true;   // respect the profile's per-frequency boost ceiling (curve 2)
+    bool   clampToMaxBoost = true;   // limit boosts: global maxBoostDb and the profile's own per-frequency ceiling
+    double maxBoostDb      = 12.0;   // global boost limit (dB), applies to every profile
     bool   autoPreamp      = true;   // lower overall gain so the EQ never boosts above 0 dB
     double extraGainDb     = 0.0;    // user trim
 };
@@ -17,7 +18,7 @@ struct DesignOptions {
 // Target response in dB at f for channel ch, after ceiling clamp. (preamp not included)
 inline double targetDb(const Profile& p, int ch, double f, const DesignOptions& o) {
     double g = p.correctionDb(ch, f);
-    if (o.clampToMaxBoost && p.hasCeiling()) g = std::min(g, p.ceilingDb(f));
+    if (o.clampToMaxBoost) g = std::min({ g, o.maxBoostDb, p.ceilingDb(f) });
     return g;
 }
 
@@ -106,8 +107,8 @@ inline IirDesign designLowLatency(const Profile& p, int ch, double fs, double pr
         }
     };
 
-    if (p.tm) {   // parametric profile: bands map exactly onto biquads
-        for (auto& b : p.tm->bands[ch])
+    if (p.isParametric(ch)) {   // parametric profile: bands map exactly onto biquads
+        for (auto& b : p.bands(ch))
             if (b.gainDb != 0.0 && b.freq < 0.499 * fs) {
                 d.freqs.push_back(b.freq); d.gains.push_back(b.gainDb); d.q = b.q;
                 d.sections.push_back(peaking(fs, b.freq, b.gainDb, b.q));
@@ -145,4 +146,4 @@ inline IirDesign designLowLatency(const Profile& p, int ch, double fs, double pr
     return d;
 }
 
-} // namespace freeq
+} // namespace flatq

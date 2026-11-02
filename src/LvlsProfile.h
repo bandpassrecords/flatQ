@@ -25,7 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace freeq {
+namespace flatq {
 
 struct CurvePoint { double freqHz, gainDb, aux; };
 
@@ -112,4 +112,4 @@ struct LvlsProfile {
     }
 };
 
-} // namespace freeq
+} // namespace flatq

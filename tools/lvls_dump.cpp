@@ -2,7 +2,7 @@
 #include <cstdio>
 int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
-        std::string err; auto p = freeq::LvlsProfile::load(argv[i], &err);
+        std::string err; auto p = flatq::LvlsProfile::load(argv[i], &err);
         if (!p) { std::fprintf(stderr, "%s: %s\n", argv[i], err.c_str()); return 1; }
         std::printf("%s\n  %s | %s | %s\n  curves=%zu points=%zu errorBand=%.1f dB\n  peak boost=%.2f dB  safe preamp=%.2f dB\n",
             argv[i], p->manufacturer().c_str(), p->model().c_str(), p->mode().c_str(),

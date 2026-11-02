@@ -65,15 +65,15 @@ void ResponseGraph::paint (juce::Graphics& g)
     }
 }
 
-FreeQEditor::FreeQEditor (FreeQProcessor& p) : AudioProcessorEditor (p), proc (p)
+FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
     mode.addItemList ({ "Low latency (IIR)", "Linear phase (FIR)" }, 1);
     taps.addItemList ({ "4096", "8192", "16384" }, 1);
     stats.setColour (juce::Label::textColourId, juce::Colours::grey);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &presets, &loadButton, &info, &stats, &mode, &taps, &clamp, &autoPre, &bypass, &bypassExport, &trim, &modeL, &tapsL, &trimL })
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &presets, &loadButton, &info, &stats, &mode, &taps, &clamp, &autoPre, &bypass, &bypassExport, &trim, &maxBoost, &maxBoostL, &modeL, &tapsL, &trimL })
         addAndMakeVisible (c);
     presets.setTextWhenNothingSelected ("Select profile...");
-    for (int i = 0; i < FreeQProcessor::numBuiltInProfiles(); ++i) presets.addItem (FreeQProcessor::builtInProfileName (i), i + 1);
+    for (int i = 0; i < FlatQProcessor::numBuiltInProfiles(); ++i) presets.addItem (FlatQProcessor::builtInProfileName (i), i + 1);
     presets.onChange = [this]
     {
         juce::String err;
@@ -88,11 +88,12 @@ FreeQEditor::FreeQEditor (FreeQProcessor& p) : AudioProcessorEditor (p), proc (p
     bypassA = std::make_unique<BA> (p.apvts, "bypass", bypass);
     bypassExportA = std::make_unique<BA> (p.apvts, "bypassexport", bypassExport);
     bypassExport.setTooltip ("Pass audio through untouched while the host renders offline (e.g. Cubase Export Audio Mixdown)");
+    maxBoostA = std::make_unique<SA> (p.apvts, "maxboost", maxBoost);
     trimA = std::make_unique<SA> (p.apvts, "trim", trim);
 
     loadButton.onClick = [this]
     {
-        chooser = std::make_unique<juce::FileChooser> ("Select a profile", juce::File(), "*.lvls;*.tmreq");
+        chooser = std::make_unique<juce::FileChooser> ("Select a profile", juce::File(), "*.flatq;*.lvls;*.lvlsproj;*.tmreq");
         chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
             [this] (const juce::FileChooser& fc)
             {
@@ -103,12 +104,12 @@ FreeQEditor::FreeQEditor (FreeQProcessor& p) : AudioProcessorEditor (p), proc (p
                     juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not load profile", err);
             });
     };
-    setSize (640, 480);
+    setSize (640, 510);
     startTimerHz (8);
     timerCallback();
 }
 
-void FreeQEditor::timerCallback()
+void FlatQEditor::timerCallback()
 {
     const int v = proc.getGraphVersion();
     if (v == lastVersion) return;
@@ -119,13 +120,13 @@ void FreeQEditor::timerCallback()
     else { presets.setSelectedId (0, juce::dontSendNotification); presets.setTextWhenNothingSelected (d.name.isEmpty() ? "Select profile..." : "Custom: " + d.name); }
     info.setText (d.name.isEmpty() ? "" : d.name, juce::dontSendNotification);
     stats.setText (d.freqs.empty() ? "" : juce::String::formatted ("Preamp %.1f dB   |   max fit error %.1f dB%s",
-                   d.preampDb, d.maxErrDb, d.hasCeiling ? "   |   dashed = max boost" : ""), juce::dontSendNotification);
+                   d.preampDb, d.maxErrDb, d.hasCeiling ? "   |   dashed = boost limit" : ""), juce::dontSendNotification);
     graph.setData (std::move (d));
 }
 
-void FreeQEditor::paint (juce::Graphics& g) { g.fillAll (juce::Colour (0xff1c1f24)); }
+void FlatQEditor::paint (juce::Graphics& g) { g.fillAll (juce::Colour (0xff1c1f24)); }
 
-void FreeQEditor::resized()
+void FlatQEditor::resized()
 {
     auto r = getLocalBounds().reduced (14);
     auto top = r.removeFromTop (30); presets.setBounds (top.removeFromLeft (360)); top.removeFromLeft (8); loadButton.setBounds (top.removeFromLeft (100));
@@ -135,6 +136,7 @@ void FreeQEditor::resized()
     stats.setBounds (r.removeFromTop (20)); r.removeFromTop (6);
     auto row = r.removeFromTop (26); modeL.setBounds (row.removeFromLeft (110)); mode.setBounds (row.removeFromLeft (220));
     tapsL.setBounds (row.removeFromLeft (110).withTrimmedLeft (16)); taps.setBounds (row.removeFromLeft (100)); r.removeFromTop (6);
+    row = r.removeFromTop (26); maxBoostL.setBounds (row.removeFromLeft (110)); maxBoost.setBounds (row); r.removeFromTop (6);
     row = r.removeFromTop (26); trimL.setBounds (row.removeFromLeft (110)); trim.setBounds (row); r.removeFromTop (8);
     row = r.removeFromTop (26);
     clamp.setBounds (row.removeFromLeft (160)); autoPre.setBounds (row.removeFromLeft (125)); bypass.setBounds (row.removeFromLeft (80)); bypassExport.setBounds (row);

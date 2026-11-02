@@ -11,9 +11,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14,       name: macOS,   targets: "FreeQ_VST3 FreeQ_AU FreeQ_Standalone", archs: "arm64;x86_64" }
-          - { os: windows-latest, name: Windows, targets: "FreeQ_VST3 FreeQ_Standalone",           archs: "" }
-          - { os: ubuntu-latest,  name: Linux,   targets: "FreeQ_VST3 FreeQ_Standalone",           archs: "" }
+          - { os: macos-14,       name: macOS,   targets: "FlatQ_VST3 FlatQ_AU FlatQ_Standalone", archs: "arm64;x86_64" }
+          - { os: windows-latest, name: Windows, targets: "FlatQ_VST3 FlatQ_Standalone",           archs: "" }
+          - { os: ubuntu-latest,  name: Linux,   targets: "FlatQ_VST3 FlatQ_Standalone",           archs: "" }
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           for t in ${{ matrix.targets }}; do cmake --build build --config Release --target $t --parallel; done
-          cmake --build build --config Release --target lvls_dump design_test --parallel
+          cmake --build build --config Release --target lvls_dump design_test flatq_convert --parallel
 
       - name: Test (parse sample profiles)
         run: ctest --test-dir build -C Release --output-on-failure
@@ -51,29 +51,29 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           mkdir -p ~/Library/Audio/Plug-Ins/Components
-          cp -R build/FreeQ_artefacts/Release/AU/FreeQ.component ~/Library/Audio/Plug-Ins/Components/
-          codesign --force --deep -s - ~/Library/Audio/Plug-Ins/Components/FreeQ.component
-          auval -v aufx FqPl FrEQ
+          cp -R build/FlatQ_artefacts/Release/AU/FlatQ.component ~/Library/Audio/Plug-Ins/Components/
+          codesign --force --deep -s - ~/Library/Audio/Plug-Ins/Components/FlatQ.component
+          auval -v aufx FlQp FlTq
 
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
-          cd build/FreeQ_artefacts/Release
+          cd build/FlatQ_artefacts/Release
           if [ "$RUNNER_OS" = macOS ]; then
-            for d in VST3/FreeQ.vst3 AU/FreeQ.component Standalone/FreeQ.app; do codesign --force --deep -s - "$d"; done
-            ditto -c -k --keepParent VST3/FreeQ.vst3 ../../../dist/FreeQ-VST3-macOS.zip
-            ditto -c -k --keepParent AU/FreeQ.component ../../../dist/FreeQ-AU-macOS.zip
-            ditto -c -k --keepParent Standalone/FreeQ.app ../../../dist/FreeQ-Standalone-macOS.zip
+            for d in VST3/FlatQ.vst3 AU/FlatQ.component Standalone/FlatQ.app; do codesign --force --deep -s - "$d"; done
+            ditto -c -k --keepParent VST3/FlatQ.vst3 ../../../dist/FlatQ-VST3-macOS.zip
+            ditto -c -k --keepParent AU/FlatQ.component ../../../dist/FlatQ-AU-macOS.zip
+            ditto -c -k --keepParent Standalone/FlatQ.app ../../../dist/FlatQ-Standalone-macOS.zip
           elif [ "$RUNNER_OS" = Windows ]; then
-            7z a ../../../dist/FreeQ-VST3-Windows.zip VST3/FreeQ.vst3
-            7z a ../../../dist/FreeQ-Standalone-Windows.zip Standalone/FreeQ.exe
+            7z a ../../../dist/FlatQ-VST3-Windows.zip VST3/FlatQ.vst3
+            7z a ../../../dist/FlatQ-Standalone-Windows.zip Standalone/FlatQ.exe
           else
-            zip -r ../../../dist/FreeQ-VST3-Linux.zip VST3/FreeQ.vst3
-            zip -r ../../../dist/FreeQ-Standalone-Linux.zip Standalone/FreeQ
+            zip -r ../../../dist/FlatQ-VST3-Linux.zip VST3/FlatQ.vst3
+            zip -r ../../../dist/FlatQ-Standalone-Linux.zip Standalone/FlatQ
           fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FreeQ-${{ matrix.name }}
+          name: FlatQ-${{ matrix.name }}
           path: dist/*.zip

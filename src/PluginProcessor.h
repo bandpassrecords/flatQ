@@ -13,11 +13,11 @@ struct GraphData
     juce::String name;
 };
 
-class FreeQProcessor : public juce::AudioProcessor, private juce::AudioProcessorValueTreeState::Listener
+class FlatQProcessor : public juce::AudioProcessor, private juce::AudioProcessorValueTreeState::Listener
 {
 public:
-    FreeQProcessor();
-    ~FreeQProcessor() override;
+    FlatQProcessor();
+    ~FlatQProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -26,7 +26,7 @@ public:
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return "FreeQ"; }
+    const juce::String getName() const override { return "FlatQ"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -58,15 +58,15 @@ private:
     void requestRedesign();
     void redesign();
 
-    std::shared_ptr<const freeq::Profile> profile;
+    std::shared_ptr<const flatq::Profile> profile;
     juce::SpinLock profileLock;
     juce::String profilePath;                 // custom file, empty for built-ins
     std::atomic<int> builtInIndex { -1 };
-    bool setProfile (std::shared_ptr<const freeq::Profile>, const juce::String& path, int builtIn);
+    bool setProfile (std::shared_ptr<const flatq::Profile>, const juce::String& path, int builtIn);
 
     // IIR state (guarded by iirLock; audio thread only try-locks)
     juce::SpinLock iirLock;
-    std::array<std::vector<freeq::Biquad>, 2> sections;
+    std::array<std::vector<flatq::Biquad>, 2> sections;
     std::array<std::vector<double>, 2> z1, z2;
     std::array<std::vector<float>, 2> delayBuf;
     std::array<int, 2> delayPos {};
@@ -90,5 +90,5 @@ private:
     juce::SmoothedValue<float> outGain;
     std::atomic<double> sampleRateAtomic { 48000.0 };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FreeQProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FlatQProcessor)
 };

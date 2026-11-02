@@ -4,3 +4,10 @@ dist/
 cmake-build-*/
 .vscode/
 .idea/
+
+# Personal profiles and original source files stay local (headphone .flatq profiles in profiles/ are committed)
+profiles/local/
+sources/
+*.lvls
+*.lvlsproj
+*.tmreq

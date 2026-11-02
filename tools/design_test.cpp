@@ -3,7 +3,7 @@
 // Exit code 1 if an error limit is exceeded, so it doubles as a CI test.
 #include "../src/EqDesign.h"
 #include <cstdio>
-using namespace freeq;
+using namespace flatq;
 int main(int argc, char** argv) {
     int bad = 0;
     for (int a = 1; a < argc; ++a) {

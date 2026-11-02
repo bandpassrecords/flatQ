@@ -5,6 +5,7 @@
 // Assumptions: Q follows the RBJ peaking convention; type 0 = peak. Other types are flagged in warnings()
 // and treated as peaks.
 #pragma once
+#include "FlatqProfile.h"
 #include <array>
 #include <cmath>
 #include <fstream>
@@ -14,9 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace freeq {
-
-struct ParamBand { double freq = 1000, q = 1, gainDb = 0; int type = 0; };
+namespace flatq {
 
 struct TmReqProfile {
     static constexpr int kBands = 9;
@@ -24,18 +23,19 @@ struct TmReqProfile {
     std::array<double, 2> delayMs {}, chanGainDb {};
     std::vector<std::string> warnings;
 
-    // Analog-prototype magnitude of a peaking band at f (what the user "designs" in the TotalMix UI).
-    static double bandDb(const ParamBand& b, double f) {
-        if (b.gainDb == 0.0) return 0.0;
-        double A = std::pow(10.0, b.gainDb / 40.0), x = f / b.freq, d = 1 - x * x;
-        double num = d * d + (x * A / b.q) * (x * A / b.q);
-        double den = d * d + (x / (A * b.q)) * (x / (A * b.q));
-        return 10.0 * std::log10(num / den);
-    }
     double responseDb(int ch, double f) const {
         double s = chanGainDb[ch];
-        for (auto& b : bands[ch]) s += bandDb(b, f);
+        for (auto& b : bands[ch]) s += flatq::bandDb(b, f);
         return s;
+    }
+
+    FlatqProfile toFlatq(const std::string& name) const {
+        FlatqProfile p; p.name = name; p.sameBoth = false; p.warnings = warnings;
+        for (int c = 0; c < 2; ++c) {
+            p.ch[c].delayMs = delayMs[c]; p.ch[c].gainDb = chanGainDb[c];
+            for (auto& b : bands[c]) if (b.gainDb != 0.0) p.ch[c].bands.push_back(b);
+        }
+        return p;
     }
 
     static std::optional<TmReqProfile> load(const std::string& path, std::string* err = nullptr) {
@@ -78,4 +78,4 @@ struct TmReqProfile {
     }
 };
 
-} // namespace freeq
+} // namespace flatq
