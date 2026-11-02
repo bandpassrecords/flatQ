@@ -4,7 +4,12 @@
 #pragma once
 #include "Profile.h"
 #include <algorithm>
+#include <cmath>
 #include <complex>
+
+#ifndef M_PI   // MSVC does not define it by default
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace flatq {
 
