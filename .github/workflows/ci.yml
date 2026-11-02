@@ -1,0 +1,79 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_call:
+concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,       name: macOS,   targets: "FreeQ_VST3 FreeQ_AU FreeQ_Standalone", archs: "arm64;x86_64" }
+          - { os: windows-latest, name: Windows, targets: "FreeQ_VST3 FreeQ_Standalone",           archs: "" }
+          - { os: ubuntu-latest,  name: Linux,   targets: "FreeQ_VST3 FreeQ_Standalone",           archs: "" }
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libasound2-dev libx11-dev libxcomposite-dev libxcursor-dev \
+            libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev
+
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: build/_deps/juce-src
+          key: juce-8.0.4-${{ runner.os }}
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            ${{ matrix.archs != '' && format('-DCMAKE_OSX_ARCHITECTURES="{0}"', matrix.archs) || '' }}
+
+      - name: Build
+        shell: bash
+        run: |
+          for t in ${{ matrix.targets }}; do cmake --build build --config Release --target $t --parallel; done
+          cmake --build build --config Release --target lvls_dump design_test --parallel
+
+      - name: Test (parse sample profiles)
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Validate AU
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/FreeQ_artefacts/Release/AU/FreeQ.component ~/Library/Audio/Plug-Ins/Components/
+          codesign --force --deep -s - ~/Library/Audio/Plug-Ins/Components/FreeQ.component
+          auval -v aufx FqPl FrEQ
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          cd build/FreeQ_artefacts/Release
+          if [ "$RUNNER_OS" = macOS ]; then
+            for d in VST3/FreeQ.vst3 AU/FreeQ.component Standalone/FreeQ.app; do codesign --force --deep -s - "$d"; done
+            ditto -c -k --keepParent VST3/FreeQ.vst3 ../../../dist/FreeQ-VST3-macOS.zip
+            ditto -c -k --keepParent AU/FreeQ.component ../../../dist/FreeQ-AU-macOS.zip
+            ditto -c -k --keepParent Standalone/FreeQ.app ../../../dist/FreeQ-Standalone-macOS.zip
+          elif [ "$RUNNER_OS" = Windows ]; then
+            7z a ../../../dist/FreeQ-VST3-Windows.zip VST3/FreeQ.vst3
+            7z a ../../../dist/FreeQ-Standalone-Windows.zip Standalone/FreeQ.exe
+          else
+            zip -r ../../../dist/FreeQ-VST3-Linux.zip VST3/FreeQ.vst3
+            zip -r ../../../dist/FreeQ-Standalone-Linux.zip Standalone/FreeQ
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FreeQ-${{ matrix.name }}
+          path: dist/*.zip

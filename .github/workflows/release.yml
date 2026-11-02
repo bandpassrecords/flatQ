@@ -1,0 +1,19 @@
+name: Release
+# Tag e.g. v0.1.0 -> builds all platforms and attaches the zips to a GitHub release.
+# Binaries are ad-hoc signed only. For distribution without Gatekeeper warnings add Developer ID
+# signing + notarization secrets (see README "Signing").
+on:
+  push: { tags: ["v*"] }
+permissions: { contents: write }
+
+jobs:
+  build:
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, pattern: FreeQ-*, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with: { files: dist/*.zip, generate_release_notes: true }
