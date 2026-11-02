@@ -38,10 +38,10 @@ public:
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
 
-    bool loadProfile (const juce::File&, juce::String& error);
+    bool loadProfile (const juce::File&, juce::String& error, bool applyHints = true);
     static int numBuiltInProfiles();
     static juce::String builtInProfileName (int index);       // display name (file name without extension)
-    bool loadBuiltInProfile (int index, juce::String& error);
+    bool loadBuiltInProfile (int index, juce::String& error, bool applyHints = true);
     int getBuiltInIndex() const { return builtInIndex.load(); }  // -1 when a custom file is loaded
     juce::String describeProfile() const;
     GraphData getGraph() const { juce::SpinLock::ScopedLockType sl (graphLock); return graph; }
@@ -62,7 +62,7 @@ private:
     juce::SpinLock profileLock;
     juce::String profilePath;                 // custom file, empty for built-ins
     std::atomic<int> builtInIndex { -1 };
-    bool setProfile (std::shared_ptr<const flatq::Profile>, const juce::String& path, int builtIn);
+    bool setProfile (std::shared_ptr<const flatq::Profile>, const juce::String& path, int builtIn, bool applyHints);
 
     // IIR state (guarded by iirLock; audio thread only try-locks)
     juce::SpinLock iirLock;

@@ -31,6 +31,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout FlatQProcessor::createLayout
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "clamp", 1 }, "Respect max boost", true));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "maxboost", 1 }, "Max boost",
            NormalisableRange<float> (0.f, 30.f, 0.5f), 12.f));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "smooth", 1 }, "Smoothing",
+           StringArray { "Off", "1/24 oct", "1/12 oct", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct" }, 0));
+    l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "basslimit", 1 }, "Bass limit",
+           NormalisableRange<float> (0.f, 200.f, 1.f), 0.f));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "autopreamp", 1 }, "Auto preamp", true));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypass", 1 }, "Bypass", false));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypassexport", 1 }, "Skip on export (offline render)", true));
@@ -45,14 +49,14 @@ FlatQProcessor::FlatQProcessor()
       apvts (*this, nullptr, "STATE", createLayout())
 {
     for (auto& b : dryBuf) b.assign (kMaxLatency, 0.0f);
-    for (auto* id : { "mode", "taps", "clamp", "maxboost", "autopreamp" }) apvts.addParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "clamp", "maxboost", "smooth", "basslimit", "autopreamp" }) apvts.addParameterListener (id, this);
     designThread = std::make_unique<DesignThread> (*this);
     designThread->startThread();
 }
 
 FlatQProcessor::~FlatQProcessor()
 {
-    for (auto* id : { "mode", "taps", "clamp", "maxboost", "autopreamp" }) apvts.removeParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "clamp", "maxboost", "smooth", "basslimit", "autopreamp" }) apvts.removeParameterListener (id, this);
     designThread->stopThread (5000);
 }
 
@@ -77,8 +81,15 @@ void FlatQProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     requestRedesign();
 }
 
-bool FlatQProcessor::setProfile (std::shared_ptr<const flatq::Profile> p, const juce::String& path, int builtIn)
+bool FlatQProcessor::setProfile (std::shared_ptr<const flatq::Profile> p, const juce::String& path, int builtIn, bool applyHints)
 {
+    if (applyHints)   // profile's recommended settings, or the defaults when it has none
+    {
+        auto setParam = [this] (const char* id, double v) {
+            if (auto* prm = apvts.getParameter (id)) prm->setValueNotifyingHost (prm->convertTo0to1 ((float) v)); };
+        setParam ("maxboost", p->d.hintMaxBoostDb >= 0 ? p->d.hintMaxBoostDb : 12.0);
+        setParam ("basslimit", p->d.hintBassLimitHz >= 0 ? p->d.hintBassLimitHz : 0.0);
+    }
     {
         juce::SpinLock::ScopedLockType sl (profileLock);
         profile = std::move (p);
@@ -89,12 +100,12 @@ bool FlatQProcessor::setProfile (std::shared_ptr<const flatq::Profile> p, const 
     return true;
 }
 
-bool FlatQProcessor::loadProfile (const juce::File& file, juce::String& error)
+bool FlatQProcessor::loadProfile (const juce::File& file, juce::String& error, bool applyHints)
 {
     std::string err;
     auto p = flatq::Profile::load (file.getFullPathName().toStdString(), &err);
     if (! p) { error = err; return false; }
-    return setProfile (p, file.getFullPathName(), -1);
+    return setProfile (p, file.getFullPathName(), -1, applyHints);
 }
 
 int FlatQProcessor::numBuiltInProfiles() { return BinaryData::namedResourceListSize; }
@@ -105,7 +116,7 @@ juce::String FlatQProcessor::builtInProfileName (int i)
     return juce::File (BinaryData::getNamedResourceOriginalFilename (BinaryData::namedResourceList[i])).getFileNameWithoutExtension();
 }
 
-bool FlatQProcessor::loadBuiltInProfile (int i, juce::String& error)
+bool FlatQProcessor::loadBuiltInProfile (int i, juce::String& error, bool applyHints)
 {
     if (i < 0 || i >= numBuiltInProfiles()) { error = "no such built-in profile"; return false; }
     int size = 0;
@@ -114,7 +125,7 @@ bool FlatQProcessor::loadBuiltInProfile (int i, juce::String& error)
     std::string err;
     auto p = flatq::Profile::loadFromMemory (data, (size_t) size, BinaryData::getNamedResourceOriginalFilename (res), &err);
     if (! p) { error = err; return false; }
-    return setProfile (p, {}, i);
+    return setProfile (p, {}, i, applyHints);
 }
 
 juce::String FlatQProcessor::describeProfile() const
@@ -132,6 +143,11 @@ void FlatQProcessor::redesign()
     flatq::DesignOptions opt;
     opt.clampToMaxBoost = apvts.getRawParameterValue ("clamp")->load() > 0.5f;
     opt.maxBoostDb      = apvts.getRawParameterValue ("maxboost")->load();
+    {
+        static const double widths[] = { 0.0, 1.0 / 24, 1.0 / 12, 1.0 / 6, 1.0 / 3, 0.5, 1.0 };
+        opt.smoothingOct = widths[juce::jlimit (0, 6, (int) apvts.getRawParameterValue ("smooth")->load())];
+        opt.bassLimitHz  = apvts.getRawParameterValue ("basslimit")->load();
+    }
     opt.autoPreamp      = apvts.getRawParameterValue ("autopreamp")->load() > 0.5f;
     const double fs = sampleRateAtomic.load();
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
@@ -304,12 +320,12 @@ void FlatQProcessor::setStateInformation (const void* data, int size)
         if (builtIn.isNotEmpty())
         {
             for (int i = 0; i < numBuiltInProfiles(); ++i)
-                if (builtInProfileName (i) == builtIn) { loadBuiltInProfile (i, err); break; }
+                if (builtInProfileName (i) == builtIn) { loadBuiltInProfile (i, err, false); break; }
         }
         else
         {
             juce::File f (tree.getProperty ("profilePath").toString());
-            if (f.existsAsFile()) loadProfile (f, err);
+            if (f.existsAsFile()) loadProfile (f, err, false);
         }
     }
 }

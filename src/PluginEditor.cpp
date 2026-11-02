@@ -69,8 +69,9 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 {
     mode.addItemList ({ "Low latency (IIR)", "Linear phase (FIR)" }, 1);
     taps.addItemList ({ "4096", "8192", "16384" }, 1);
+    smooth.addItemList ({ "Off", "1/24 oct", "1/12 oct", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct" }, 1);
     stats.setColour (juce::Label::textColourId, juce::Colours::grey);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &presets, &loadButton, &info, &stats, &mode, &taps, &clamp, &autoPre, &bypass, &bypassExport, &trim, &maxBoost, &maxBoostL, &modeL, &tapsL, &trimL })
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &presets, &loadButton, &info, &stats, &mode, &taps, &clamp, &autoPre, &bypass, &bypassExport, &trim, &maxBoost, &maxBoostL, &smooth, &smoothL, &bassLimit, &bassLimitL, &modeL, &tapsL, &trimL })
         addAndMakeVisible (c);
     presets.setTextWhenNothingSelected ("Select profile...");
     for (int i = 0; i < FlatQProcessor::numBuiltInProfiles(); ++i) presets.addItem (FlatQProcessor::builtInProfileName (i), i + 1);
@@ -88,6 +89,9 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     bypassA = std::make_unique<BA> (p.apvts, "bypass", bypass);
     bypassExportA = std::make_unique<BA> (p.apvts, "bypassexport", bypassExport);
     bypassExport.setTooltip ("Pass audio through untouched while the host renders offline (e.g. Cubase Export Audio Mixdown)");
+    smoothA = std::make_unique<CA> (p.apvts, "smooth", smooth);
+    bassLimitA = std::make_unique<SA> (p.apvts, "basslimit", bassLimit);
+    bassLimit.setTooltip ("Correction fades out below this frequency (0 = off). Use it when a speaker cannot reproduce deep bass.");
     maxBoostA = std::make_unique<SA> (p.apvts, "maxboost", maxBoost);
     trimA = std::make_unique<SA> (p.apvts, "trim", trim);
 
@@ -104,7 +108,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
                     juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not load profile", err);
             });
     };
-    setSize (640, 510);
+    setSize (640, 570);
     startTimerHz (8);
     timerCallback();
 }
@@ -137,6 +141,8 @@ void FlatQEditor::resized()
     auto row = r.removeFromTop (26); modeL.setBounds (row.removeFromLeft (110)); mode.setBounds (row.removeFromLeft (220));
     tapsL.setBounds (row.removeFromLeft (110).withTrimmedLeft (16)); taps.setBounds (row.removeFromLeft (100)); r.removeFromTop (6);
     row = r.removeFromTop (26); maxBoostL.setBounds (row.removeFromLeft (110)); maxBoost.setBounds (row); r.removeFromTop (6);
+    row = r.removeFromTop (26); bassLimitL.setBounds (row.removeFromLeft (110)); bassLimit.setBounds (row); r.removeFromTop (6);
+    row = r.removeFromTop (26); smoothL.setBounds (row.removeFromLeft (110)); smooth.setBounds (row.removeFromLeft (220)); r.removeFromTop (6);
     row = r.removeFromTop (26); trimL.setBounds (row.removeFromLeft (110)); trim.setBounds (row); r.removeFromTop (8);
     row = r.removeFromTop (26);
     clamp.setBounds (row.removeFromLeft (160)); autoPre.setBounds (row.removeFromLeft (125)); bypass.setBounds (row.removeFromLeft (80)); bypassExport.setBounds (row);

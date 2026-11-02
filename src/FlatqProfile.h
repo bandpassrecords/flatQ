@@ -13,6 +13,8 @@
 //     end
 //     aux log 355 20 22000 ... end # optional extra column kept from imports (unused by the engine)
 //     band 1000 2.0 -3.5           # parametric peaking band: Hz, Q, dB (any number, stacked on the curve)
+//   hint max_boost_db 9            # optional recommended plugin settings, applied when the profile is loaded
+//   hint bass_limit_hz 50
 //   ceiling log 355 20 22000       # optional max-boost limit (dB) per frequency
 //     ...
 //   end
@@ -80,6 +82,7 @@ struct FlatqProfile {
     std::array<Channel, 2> ch;
     bool sameBoth = true;                    // true: ch[0] applies to both channels
     std::vector<double> ceilFreq, ceilGain;  // optional boost ceiling
+    double hintMaxBoostDb = -1, hintBassLimitHz = -1;   // recommended settings (< 0 = none)
     std::vector<std::string> warnings;
 
     int channels() const { return sameBoth ? 1 : 2; }
@@ -126,6 +129,7 @@ struct FlatqProfile {
                 else if (c == "R") { cur = &p.ch[1]; sawR = true; p.sameBoth = false; }
                 else return fail("channel must be L, R or LR", ln);
             }
+            else if (kw == "hint") { std::string k; double v = 0; ls >> k >> v; if (k == "max_boost_db") p.hintMaxBoostDb = v; else if (k == "bass_limit_hz") p.hintBassLimitHz = v; }
             else if (kw == "delay_ms") ls >> cur->delayMs;
             else if (kw == "gain_db") ls >> cur->gainDb;
             else if (kw == "band") { ParamBand b; if (!(ls >> b.freq >> b.q >> b.gainDb) || b.freq <= 0 || b.q <= 0) return fail("band needs: freq Q gain", ln); cur->bands.push_back(b); }
@@ -142,6 +146,8 @@ struct FlatqProfile {
 
     std::string serialize() const {
         std::string o = "# FlatQ profile\nflatq 1\nname " + name + "\n";
+        if (hintMaxBoostDb >= 0) o += "hint max_boost_db " + std::to_string(hintMaxBoostDb) + "\n";
+        if (hintBassLimitHz >= 0) o += "hint bass_limit_hz " + std::to_string(hintBassLimitHz) + "\n";
         auto num = [](double v) { char b[40]; std::snprintf(b, sizeof b, "%.6f", v);
             std::string s = b; if (s.find('.') != std::string::npos) { while (s.back() == '0') s.pop_back(); if (s.back() == '.') s.pop_back(); }
             return s == "-0" ? std::string("0") : s; };

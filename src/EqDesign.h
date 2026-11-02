@@ -16,13 +16,34 @@ namespace flatq {
 struct DesignOptions {
     bool   clampToMaxBoost = true;   // limit boosts: global maxBoostDb and the profile's own per-frequency ceiling
     double maxBoostDb      = 12.0;   // global boost limit (dB), applies to every profile
+    double smoothingOct    = 0.0;    // fractional-octave smoothing width of the target (0 = off, 1/3 = third-octave)
+    double bassLimitHz     = 0.0;    // 0 = off. Correction fades out between bassLimitHz/2 and bassLimitHz and is 0 dB below
     bool   autoPreamp      = true;   // lower overall gain so the EQ never boosts above 0 dB
     double extraGainDb     = 0.0;    // user trim
 };
 
-// Target response in dB at f for channel ch, after ceiling clamp. (preamp not included)
-inline double targetDb(const Profile& p, int ch, double f, const DesignOptions& o) {
+// Correction before smoothing/limits: profile response with the bass fade-out applied.
+inline double rawTargetDb(const Profile& p, int ch, double f, const DesignOptions& o) {
     double g = p.correctionDb(ch, f);
+    if (o.bassLimitHz > 0 && f < o.bassLimitHz) {
+        double t = std::clamp(std::log2(f / (o.bassLimitHz * 0.5)), 0.0, 1.0);     // 0 at limit/2 ... 1 at limit
+        g *= 0.5 - 0.5 * std::cos(M_PI * t);                                         // raised-cosine fade
+    }
+    return g;
+}
+
+// Target response in dB at f for channel ch, after bass fade, smoothing and boost limits. (preamp not included)
+inline double targetDb(const Profile& p, int ch, double f, const DesignOptions& o) {
+    double g;
+    if (o.smoothingOct > 0) {                       // Gaussian smoothing in log-frequency, sigma = width / 2.355 octaves
+        const double sigma = o.smoothingOct / 2.355;
+        double sum = 0, wsum = 0;
+        for (int k = -9; k <= 9; ++k) {
+            double x = k / 3.0 * sigma, w = std::exp(-0.5 * (x / sigma) * (x / sigma));
+            sum += w * rawTargetDb(p, ch, f * std::pow(2.0, x), o); wsum += w;
+        }
+        g = sum / wsum;
+    } else g = rawTargetDb(p, ch, f, o);
     if (o.clampToMaxBoost) g = std::min({ g, o.maxBoostDb, p.ceilingDb(f) });
     return g;
 }
@@ -112,7 +133,10 @@ inline IirDesign designLowLatency(const Profile& p, int ch, double fs, double pr
         }
     };
 
-    if (p.isParametric(ch)) {   // parametric profile: bands map exactly onto biquads
+    bool unmodified = p.isParametric(ch) && o.smoothingOct <= 0 && o.bassLimitHz <= 0;
+    for (size_t i = 0; unmodified && i < grid.size(); ++i)             // boost limits would change the response too
+        if (std::abs(p.correctionDb(ch, grid[i]) - targetDb(p, ch, grid[i], o)) > 1e-9) unmodified = false;
+    if (unmodified) {   // parametric profile: bands map exactly onto biquads
         for (auto& b : p.bands(ch))
             if (b.gainDb != 0.0 && b.freq < 0.499 * fs) {
                 d.freqs.push_back(b.freq); d.gains.push_back(b.gainDb); d.q = b.q;

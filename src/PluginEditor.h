@@ -24,13 +24,13 @@ private:
     int lastVersion = -1;
     juce::TextButton loadButton { "Load file..." };
     juce::Label info, stats;
-    juce::ComboBox presets, mode, taps;
+    juce::ComboBox presets, mode, taps, smooth;
     juce::ToggleButton clamp { "Respect max boost" }, autoPre { "Auto preamp" }, bypass { "Bypass" }, bypassExport { "Skip on export" };
-    juce::Slider trim { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight }, maxBoost { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
-    juce::Label modeL { {}, "Mode" }, tapsL { {}, "FIR length" }, trimL { {}, "Output trim (dB)" }, maxBoostL { {}, "Max boost (dB)" };
+    juce::Slider trim { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight }, maxBoost { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight }, bassLimit { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Label modeL { {}, "Mode" }, tapsL { {}, "FIR length" }, trimL { {}, "Output trim (dB)" }, maxBoostL { {}, "Max boost (dB)" }, smoothL { {}, "Smoothing" }, bassLimitL { {}, "Bass limit (Hz)" };
     std::unique_ptr<juce::FileChooser> chooser;
     using CA = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<CA> modeA, tapsA; std::unique_ptr<BA> clampA, preA, bypassA, bypassExportA; std::unique_ptr<SA> trimA, maxBoostA;
+    std::unique_ptr<CA> modeA, tapsA, smoothA; std::unique_ptr<BA> clampA, preA, bypassA, bypassExportA; std::unique_ptr<SA> trimA, maxBoostA, bassLimitA;
 };
