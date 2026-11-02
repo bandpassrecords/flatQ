@@ -70,7 +70,7 @@ FreeQEditor::FreeQEditor (FreeQProcessor& p) : AudioProcessorEditor (p), proc (p
     mode.addItemList ({ "Low latency (IIR)", "Linear phase (FIR)" }, 1);
     taps.addItemList ({ "4096", "8192", "16384" }, 1);
     stats.setColour (juce::Label::textColourId, juce::Colours::grey);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &presets, &loadButton, &info, &stats, &mode, &taps, &clamp, &autoPre, &bypass, &trim, &modeL, &tapsL, &trimL })
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &presets, &loadButton, &info, &stats, &mode, &taps, &clamp, &autoPre, &bypass, &bypassExport, &trim, &modeL, &tapsL, &trimL })
         addAndMakeVisible (c);
     presets.setTextWhenNothingSelected ("Select profile...");
     for (int i = 0; i < FreeQProcessor::numBuiltInProfiles(); ++i) presets.addItem (FreeQProcessor::builtInProfileName (i), i + 1);
@@ -86,6 +86,8 @@ FreeQEditor::FreeQEditor (FreeQProcessor& p) : AudioProcessorEditor (p), proc (p
     clampA = std::make_unique<BA> (p.apvts, "clamp", clamp);
     preA = std::make_unique<BA> (p.apvts, "autopreamp", autoPre);
     bypassA = std::make_unique<BA> (p.apvts, "bypass", bypass);
+    bypassExportA = std::make_unique<BA> (p.apvts, "bypassexport", bypassExport);
+    bypassExport.setTooltip ("Pass audio through untouched while the host renders offline (e.g. Cubase Export Audio Mixdown)");
     trimA = std::make_unique<SA> (p.apvts, "trim", trim);
 
     loadButton.onClick = [this]
@@ -135,5 +137,5 @@ void FreeQEditor::resized()
     tapsL.setBounds (row.removeFromLeft (110).withTrimmedLeft (16)); taps.setBounds (row.removeFromLeft (100)); r.removeFromTop (6);
     row = r.removeFromTop (26); trimL.setBounds (row.removeFromLeft (110)); trim.setBounds (row); r.removeFromTop (8);
     row = r.removeFromTop (26);
-    clamp.setBounds (row.removeFromLeft (160)); autoPre.setBounds (row.removeFromLeft (130)); bypass.setBounds (row);
+    clamp.setBounds (row.removeFromLeft (160)); autoPre.setBounds (row.removeFromLeft (125)); bypass.setBounds (row.removeFromLeft (80)); bypassExport.setBounds (row);
 }

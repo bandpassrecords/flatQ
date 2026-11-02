@@ -79,6 +79,14 @@ private:
     GraphData graph;
     std::atomic<int> graphVersion { 0 };
 
+    // Dry path used when bypassed (manual bypass or offline export): delayed by the reported latency so the
+    // host's latency compensation stays correct.
+    static constexpr int kMaxLatency = 8192;
+    std::array<std::vector<float>, 2> dryBuf;
+    std::array<int, 2> dryPos {};
+    std::atomic<int> latencyNow { 0 };
+    void processDry (juce::AudioBuffer<float>&);
+
     juce::SmoothedValue<float> outGain;
     std::atomic<double> sampleRateAtomic { 48000.0 };
 

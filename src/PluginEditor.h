@@ -25,12 +25,12 @@ private:
     juce::TextButton loadButton { "Load file..." };
     juce::Label info, stats;
     juce::ComboBox presets, mode, taps;
-    juce::ToggleButton clamp { "Respect max boost" }, autoPre { "Auto preamp" }, bypass { "Bypass" };
+    juce::ToggleButton clamp { "Respect max boost" }, autoPre { "Auto preamp" }, bypass { "Bypass" }, bypassExport { "Skip on export" };
     juce::Slider trim { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Label modeL { {}, "Mode" }, tapsL { {}, "FIR length" }, trimL { {}, "Output trim (dB)" };
     std::unique_ptr<juce::FileChooser> chooser;
     using CA = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<CA> modeA, tapsA; std::unique_ptr<BA> clampA, preA, bypassA; std::unique_ptr<SA> trimA;
+    std::unique_ptr<CA> modeA, tapsA; std::unique_ptr<BA> clampA, preA, bypassA, bypassExportA; std::unique_ptr<SA> trimA;
 };

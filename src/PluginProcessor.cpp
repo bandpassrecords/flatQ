@@ -31,6 +31,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FreeQProcessor::createLayout
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "clamp", 1 }, "Respect max boost", true));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "autopreamp", 1 }, "Auto preamp", true));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypass", 1 }, "Bypass", false));
+    l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypassexport", 1 }, "Skip on export (offline render)", true));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "trim", 1 }, "Output trim",
            NormalisableRange<float> (-24.f, 12.f, 0.1f), 0.f));
     return l;
@@ -41,6 +42,7 @@ FreeQProcessor::FreeQProcessor()
                                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "STATE", createLayout())
 {
+    for (auto& b : dryBuf) b.assign (kMaxLatency, 0.0f);
     for (auto* id : { "mode", "taps", "clamp", "autopreamp" }) apvts.addParameterListener (id, this);
     designThread = std::make_unique<DesignThread> (*this);
     designThread->startThread();
@@ -171,6 +173,7 @@ void FreeQProcessor::redesign()
             }
             iirReady = true;
         }
+        latencyNow = 0;
         juce::MessageManager::callAsync ([this] { setLatencySamples (0); });
     }
     else
@@ -193,10 +196,29 @@ void FreeQProcessor::redesign()
         convolution.loadImpulseResponse (std::move (ir), fs, juce::dsp::Convolution::Stereo::yes,
                                          juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
         firReady = true;
+        latencyNow = taps / 2;
         juce::MessageManager::callAsync ([this, taps] { setLatencySamples (taps / 2); });
     }
     { juce::SpinLock::ScopedLockType sl (graphLock); graph = std::move (g); }
     ++graphVersion;
+}
+
+void FreeQProcessor::processDry (juce::AudioBuffer<float>& buffer)
+{
+    const int len = juce::jmin (latencyNow.load(), kMaxLatency);
+    if (len <= 0) return;
+    const int n = buffer.getNumSamples();
+    for (int c = 0; c < juce::jmin (buffer.getNumChannels(), 2); ++c)
+    {
+        float* x = buffer.getWritePointer (c);
+        auto& d = dryBuf[(size_t) c]; int& pos = dryPos[(size_t) c];
+        if (pos >= len) pos = 0;
+        for (int i = 0; i < n; ++i)
+        {
+            std::swap (x[i], d[(size_t) pos]);
+            if (++pos >= len) pos = 0;
+        }
+    }
 }
 
 void FreeQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -205,7 +227,9 @@ void FreeQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const int n = buffer.getNumSamples();
     const int nch = juce::jmin (buffer.getNumChannels(), 2);
 
-    if (apvts.getRawParameterValue ("bypass")->load() > 0.5f) return;
+    const bool manualBypass = apvts.getRawParameterValue ("bypass")->load() > 0.5f;
+    const bool skipForExport = apvts.getRawParameterValue ("bypassexport")->load() > 0.5f && isNonRealtime();
+    if (manualBypass || skipForExport) { processDry (buffer); return; }
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
 
     if (mode == LowLatency)
