@@ -780,7 +780,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         targetPick.addItem ("Auto", 1);
         for (int i = 0; i < FlatQProcessor::numTargets(); ++i) targetPick.addItem (FlatQProcessor::targetName (i), i + 2);
         targetPick.setSelectedId (1, juce::dontSendNotification);
-        searchBox.setTextToShowWhenEmpty ("Search " + juce::String (db.size()) + " measurements...", theme::dim);
+        searchBox.setTextToShowWhenEmpty ("Search", theme::dim);
         searchBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff262626));
         searchBox.setColour (juce::TextEditor::textColourId, theme::text);
         searchBox.setColour (juce::TextEditor::outlineColourId, theme::divider);
