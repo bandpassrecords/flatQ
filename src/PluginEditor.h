@@ -361,8 +361,8 @@ private:
     bool canClick, hover = false;
 };
 
-// Profile library: built-in profiles, the user's profiles (saved in Application Support/FlatQ/Profiles) and, if a
-// profile was loaded from elsewhere, that one. Each row has a coloured type tag and a three-dots menu
+// Profile library: the user's profiles (saved in Application Support/FlatQ/Profiles) and, if a profile was loaded from
+// elsewhere, that one. Each row has a headphone / speaker icon and a three-dots menu
 // (rename / duplicate / delete; built-in and external profiles can only be duplicated).
 class ProfileList : public juce::Component, private juce::ListBoxModel
 {
@@ -378,7 +378,7 @@ public:
     }
     void syncSelection();    // highlight the loaded profile (no disk access)
 private:
-    struct Entry { juce::String name, tag, kind; int builtIn = -1; juce::File file; bool external = false; };
+    struct Entry { juce::String name, kind; int builtIn = -1; juce::File file; bool external = false; };
     void paintListBoxItem (int row, juce::Graphics&, int w, int h, bool selected) override;
     void listBoxItemClicked (int row, const juce::MouseEvent&) override;
     void selectedRowsChanged (int) override {}

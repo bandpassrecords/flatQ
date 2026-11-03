@@ -340,13 +340,13 @@ void ProfileList::refresh()
     const auto cur = proc.getProfilePath();
     for (auto& f : FlatQProcessor::userProfileFiles())
     {
-        Entry e; e.name = f.getFileNameWithoutExtension(); e.tag = "MY"; e.file = f; e.kind = FlatQProcessor::profileKind (f);
+        Entry e; e.name = f.getFileNameWithoutExtension(); e.file = f; e.kind = FlatQProcessor::profileKind (f);
         currentFound |= f.getFullPathName() == cur;
         entries.push_back (e);
     }
     if (cur.isNotEmpty() && ! currentFound && juce::File (cur).existsAsFile())   // loaded from somewhere else (e.g. an old session): show it too
     {
-        Entry e; e.name = juce::File (cur).getFileNameWithoutExtension(); e.tag = "EXT"; e.file = juce::File (cur); e.external = true; e.kind = FlatQProcessor::profileKind (e.file);
+        Entry e; e.name = juce::File (cur).getFileNameWithoutExtension(); e.file = juce::File (cur); e.external = true; e.kind = FlatQProcessor::profileKind (e.file);
         entries.insert (entries.begin(), e);
     }
     box.updateContent();
@@ -372,14 +372,7 @@ void ProfileList::paintListBoxItem (int row, juce::Graphics& g, int w, int h, bo
     if (selected) { g.setColour (accent.withAlpha (0.14f)); g.fillRect (0, 0, w, h); g.setColour (accent); g.fillRect (0, 0, 3, h); }
     g.setColour (selected ? text : text.withAlpha (0.85f)); g.setFont (juce::FontOptions (12.5f));
     drawKindIcon (g, juce::Rectangle<float> (14.f, ((float) h - 22.f) / 2.f, 22.f, 22.f), e.kind, selected ? accent : dim);
-    g.drawFittedText (e.name, 46, 2, w - 124, h - 4, juce::Justification::centredLeft, 2, 0.9f);
-
-    juce::Colour c = result;
-    if (e.tag == "FLQ") c = accent; else if (e.tag == "LVL") c = good; else if (e.tag == "RME") c = chanR; else if (e.tag == "MY") c = juce::Colour (0xfffbbf24);
-    auto chip = juce::Rectangle<float> ((float) w - 70.f, ((float) h - 18.f) / 2.f, 38.f, 18.f);
-    g.setColour (c); g.fillRoundedRectangle (chip, 3.f);
-    g.setColour (juce::Colours::black.withAlpha (0.85f)); g.setFont (juce::FontOptions (10.f, juce::Font::bold));
-    g.drawText (e.tag, chip, juce::Justification::centred);
+    g.drawFittedText (e.name, 46, 2, w - 84, h - 4, juce::Justification::centredLeft, 2, 0.9f);
 
     g.setColour (selected ? text : dim);                       // three dots
     for (int i = -1; i <= 1; ++i) g.fillEllipse ((float) w - 16.f - 1.5f, (float) h * 0.5f + (float) i * 5.f - 1.5f, 3.f, 3.f);
