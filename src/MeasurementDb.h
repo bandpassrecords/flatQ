@@ -11,7 +11,7 @@
 class MeasurementDb
 {
 public:
-    struct Entry { juce::String source, form, rig, brand, name, model, haystack; };
+    struct Entry { juce::String source, form, rig, brand, name, model, haystack; bool preEq = false; };   // preEq: an AutoEq result, not a raw measurement
 
     static MeasurementDb& get() { static MeasurementDb db; return db; }
     bool available() const { return ! entries.empty(); }
@@ -77,7 +77,7 @@ private:
         {
             auto f = juce::StringArray::fromTokens (line, "\t", "");
             if (f.size() < 6) continue;
-            Entry e { f[0], f[1], f[2], f[3], f[4], f[5], {} };
+            Entry e { f[0], f[1], f[2], f[3], f[4], f[5], {}, f.size() > 6 && f[6] == "eq" };
             e.haystack = (e.name + " " + e.brand + " " + e.source + " " + e.rig).toLowerCase();
             entries.push_back (std::move (e));
         }

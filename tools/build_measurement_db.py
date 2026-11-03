@@ -4,8 +4,11 @@
     tools/build_measurement_db.py /path/to/AutoEq [output_dir]      (default output: data/measurements)
 
 Writes
-  measurements.tsv     one line per measurement: source, form, rig, brand, name, model
+  measurements.tsv     one line per entry: source, form, rig, brand, name, model, kind ("" = raw measurement, "eq" = AutoEq result)
   measurements.bin.gz  gzip of N x 480 little-endian int16 (dB * 100) on a log grid, 20 Hz .. 20 kHz, same order
+
+crinacle's raw measurements are not part of the AutoEq checkout, only AutoEq's finished results for them
+(results/crinacle/<rig>/<name>/<name> GraphicEQ.txt), so those entries hold the EQ curve itself ("eq") instead of a measurement.
 
 The data keeps its original licences (the AutoEq code is MIT, the measurements belong to their authors), so the output
 folder is git-ignored: the plugin builds without it, just without the measurement search.
@@ -79,14 +82,37 @@ for src in sorted(os.listdir(meas)):
             name = fn[:-4]
             rig = rel[1] if len(rel) > 2 else rig_of.get((src, name), "")
             brand, model = split_brand(name)
-            rows.append((src, rel[0], rig, brand, name, model))
+            rows.append((src, rel[0], rig, brand, name, model, ""))
             blobs.append(struct.pack("<%dh" % POINTS, *resample(f, g)))
+
+# crinacle: AutoEq's own EQ curves (GraphicEQ: "f g; f g; ...") for measurements that are not in the checkout
+cri = os.path.join(root, "results", "crinacle")
+n_eq = 0
+if os.path.isdir(cri):
+    for rigdir in sorted(os.listdir(cri)):
+        full = os.path.join(cri, rigdir)
+        m = re.match(r"(.*) (in-ear|over-ear|earbud)$", rigdir)
+        if not os.path.isdir(full) or not m:
+            continue
+        rig, form = m.groups()
+        for name in sorted(os.listdir(full)):
+            gp = os.path.join(full, name, name + " GraphicEQ.txt")
+            if not os.path.isfile(gp):
+                continue
+            pairs = re.findall(r"([\d.]+) (-?[\d.]+)", open(gp, encoding="utf-8").read())
+            f = [float(a) for a, _ in pairs]; g = [float(b) for _, b in pairs]
+            if len(f) < 8:
+                continue
+            brand, model = split_brand(name)
+            rows.append(("crinacle", form, rig, brand, name, model, "eq"))
+            blobs.append(struct.pack("<%dh" % POINTS, *resample(f, g)))
+            n_eq += 1
 
 with open(os.path.join(out, "measurements.tsv"), "w", encoding="utf-8") as fh:
     for r in rows:
         fh.write("\t".join(x.replace("\t", " ") for x in r) + "\n")
 with gzip.open(os.path.join(out, "measurements.bin.gz"), "wb", compresslevel=9) as fh:
     fh.write(b"".join(blobs))
-print("%d measurements (%d skipped), %d sources -> %s" % (len(rows), skipped, len({r[0] for r in rows}), os.path.abspath(out)))
+print("%d entries (%d raw measurements + %d crinacle EQ results, %d skipped), %d sources -> %s" % (len(rows), len(rows) - n_eq, n_eq, skipped, len({r[0] for r in rows}), os.path.abspath(out)))
 print("pack: %.1f MB, index: %.0f KB" % (os.path.getsize(os.path.join(out, "measurements.bin.gz")) / 1e6,
                                          os.path.getsize(os.path.join(out, "measurements.tsv")) / 1e3))

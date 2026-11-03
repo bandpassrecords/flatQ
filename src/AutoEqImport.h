@@ -49,6 +49,14 @@ inline FlatqProfile buildAutoEqProfile(const CsvCurve& m, const CsvCurve& t, con
     return p;
 }
 
+// A finished AutoEq equalization curve (e.g. its results for crinacle's measurements): used as the correction as it is.
+inline FlatqProfile buildPreEqProfile(const CsvCurve& eq, const std::string& name) {
+    FlatqProfile p; p.name = name; p.sameBoth = true;
+    p.ch[0].freq = eq.freq; p.ch[0].gain = eq.db;
+    p.ch[1] = p.ch[0];
+    return p;   // no hints: AutoEq already smoothed and limited it
+}
+
 inline std::optional<FlatqProfile> buildAutoEqProfile(const std::string& measurementCsv, const std::string& targetCsv,
                                                       const std::string& name, std::string* err = nullptr, double maxBoostDb = 6.0) {
     CsvCurve m, t;

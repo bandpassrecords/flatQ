@@ -296,10 +296,18 @@ bool FlatQProcessor::importMeasurement (int measurementIndex, int targetIndex, j
     auto& db = MeasurementDb::get();
     flatq::CsvCurve m, t;
     if (! db.available() || ! db.curve (measurementIndex, m)) { error = "measurement data not available"; return false; }
+    const auto& e = db.entry (measurementIndex);
+    if (e.preEq)   // AutoEq's finished equalization (no raw measurement exists): the curve is the correction
+    {
+        const auto label = e.name + " (" + e.source + " - AutoEq EQ)";
+        auto prof = flatq::buildPreEqProfile (m, label.toStdString());
+        juce::File out;
+        if (! saveToLibrary (prof, label, true, out, error)) return false;
+        return loadProfile (out, error);
+    }
     if (targetIndex < 0) targetIndex = defaultTargetFor (measurementIndex);
     std::string err;
     if (! flatq::parseAutoEqCsv (targetCsvText (targetIndex).toStdString(), t, &err)) { error = "target: " + juce::String (err); return false; }
-    const auto& e = db.entry (measurementIndex);
     const auto name = e.name + " (" + e.source + ") - " + targetName (targetIndex);
     auto prof = flatq::buildAutoEqProfile (m, t, name.toStdString());
     juce::File out;

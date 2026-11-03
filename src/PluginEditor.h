@@ -259,7 +259,7 @@ private:
         g.setColour (theme::text); g.setFont (juce::FontOptions (12.5f));
         g.drawText (e.name, 14, 5, w - 24, 18, juce::Justification::centredLeft, true);
         g.setColour (theme::dim); g.setFont (juce::FontOptions (11.f));
-        g.drawText (e.source + "  -  " + e.form + (e.rig.isNotEmpty() ? "  -  " + e.rig : juce::String()), 14, 24, w - 24, 16, juce::Justification::centredLeft, true);
+        g.drawText (e.source + (e.preEq ? " (AutoEq EQ)" : juce::String()) + "  -  " + e.form + (e.rig.isNotEmpty() ? "  -  " + e.rig : juce::String()), 14, 24, w - 24, 16, juce::Justification::centredLeft, true);
         g.setColour (theme::divider); g.drawHorizontalLine (h - 1, 0.f, (float) w);
     }
     void listBoxItemClicked (int row, const juce::MouseEvent&) override { if (row >= 0 && row < (int) hits.size() && onPick) onPick (hits[(size_t) row]); }
@@ -267,7 +267,9 @@ private:
     {
         if (row < 0 || row >= (int) hits.size()) return {};
         const auto& e = MeasurementDb::get().entry (hits[(size_t) row]);
-        return e.name + " - measured by " + e.source + " (" + e.form + "). Click to create a profile from this measurement with the chosen target.";
+        return e.name + " - " + e.source + " (" + e.form + "). "
+             + (e.preEq ? "Click to use AutoEq's finished EQ for it (the raw measurement is not available, so the target does not apply)."
+                        : "Click to create a profile from this measurement with the chosen target.");
     }
     std::vector<int> hits;
     juce::ListBox box { {}, this };
