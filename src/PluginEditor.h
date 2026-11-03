@@ -383,12 +383,12 @@ private:
     void listBoxItemClicked (int row, const juce::MouseEvent&) override;
     void selectedRowsChanged (int) override {}
     int getNumRows() override { return (int) entries.size(); }
-    juce::String getTooltipForRow (int row) override;
     void showMenu (int row, juce::Point<int> screenPos);
     void askRename (Entry);
     void askDelete (Entry);
     void report (bool ok, const juce::String& err);
     FlatQProcessor& proc;
+    std::unique_ptr<juce::FileChooser> chooser;
     std::vector<Entry> entries;
     juce::ListBox box { {}, this };
 };
@@ -419,10 +419,7 @@ private:
     {
         if (row < 0 || row >= (int) hits.size()) return {};
         const auto& e = MeasurementDb::get().entry (hits[(size_t) row]);
-        return e.name + " - " + e.source + " (" + e.form + "). "
-             + (e.builtIn >= 0 ? "Click to add this profile to your library."
-                       : e.preEq ? "Click to use AutoEq's finished EQ for it (the raw measurement is not available, so the target does not apply)."
-                        : "Click to create a profile from this measurement with the chosen target.");
+        return e.preEq && e.builtIn < 0 ? "AutoEq's finished EQ. The raw measurement is not available, so the target does not apply." : juce::String();
     }
     std::vector<int> hits;
     juce::ListBox box { {}, this };
@@ -494,7 +491,9 @@ private:
     ResponseGraph graph;
     ProfileList profiles { proc };
     AddProfileScreen addScreen { proc };            // the "Add a profile" screen (search, brands, file / CSV import)
-    juce::TextButton addButton { "+  Add profile" };
+    juce::TextButton addButton { "+  Add profile" }, saveAsBtn { "Save as profile..." };   // saveAsBtn: shown once the equalization was edited by hand
+    std::unique_ptr<juce::FileChooser> exportChooser;
+    void saveAsFlow();
     void openAddScreen() { addScreen.open(); }
     juce::Label title, subtitle, logo { {}, "FlatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL, brand { {}, "BandPass Records" };
     LogoMark logoMark;

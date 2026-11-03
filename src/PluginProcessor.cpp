@@ -272,6 +272,50 @@ bool FlatQProcessor::addBuiltInToLibrary (int builtIn, juce::String& error, bool
     return loadProfile (out, error, applyHints);
 }
 
+bool FlatQProcessor::saveEqualizationAs (const juce::String& name, juce::String& error)
+{
+    std::shared_ptr<const flatq::Profile> p;
+    { juce::SpinLock::ScopedLockType sl (profileLock); p = profile; }
+    if (! p) { error = "no profile is loaded"; return false; }
+
+    auto opt = baseOptions();
+    bool differs = false;
+    for (size_t i = 0; i < 31; ++i) differs |= std::abs (manualEq[0][i].load() - manualEq[1][i].load()) > 1e-4f;
+    if (manualEditedCount() > 0)
+        for (size_t c = 0; c < 2; ++c)
+            for (auto& b : manualEq[c]) opt.manualDb[c].push_back (b.load());
+
+    const int nResp = p->channels();
+    const bool twoChannels = nResp > 1 || differs;
+    flatq::FlatqProfile out;
+    out.name = name.toStdString(); out.type = p->d.kind(); out.sameBoth = ! twoChannels;
+    const auto grid = flatq::logGrid (960, 20.0, 20000.0);
+    for (int c = 0; c < (twoChannels ? 2 : 1); ++c)
+    {
+        const int sc = juce::jmin (c, nResp - 1);
+        auto& ch = out.ch[(size_t) c];
+        ch.freq = grid;
+        for (double f : grid) ch.gain.push_back (flatq::targetDb (*p, sc, f, opt));
+        ch.delayMs = p->delayMs (sc);
+    }
+    if (! twoChannels) out.ch[1] = out.ch[0];
+    out.hintMaxBoostDb = 30.0;   // the boosts are already part of the curve (limits and manual changes included): do not clamp it again
+
+    juce::File file;
+    if (! saveToLibrary (out, name, false, file, error)) return false;
+    return loadProfile (file, error);
+}
+
+bool FlatQProcessor::exportProfile (const juce::File& source, juce::File dest, juce::String& error)
+{
+    std::string err;
+    auto p = flatq::Profile::load (source.getFullPathName().toStdString(), &err);
+    if (! p) { error = err; return false; }
+    if (! dest.hasFileExtension ("flatq")) dest = dest.withFileExtension ("flatq");
+    if (! dest.replaceWithText (juce::String (p->d.serialize()))) { error = "cannot write " + dest.getFullPathName(); return false; }
+    return true;
+}
+
 bool FlatQProcessor::duplicateProfile (int builtIn, const juce::File& file, juce::String& error)
 {
     std::shared_ptr<const flatq::Profile> p;
@@ -392,12 +436,8 @@ juce::String FlatQProcessor::describeProfile() const
     return graph.name.isEmpty() ? juce::String ("No profile loaded") : graph.name;
 }
 
-void FlatQProcessor::redesign()
+flatq::DesignOptions FlatQProcessor::baseOptions() const
 {
-    std::shared_ptr<const flatq::Profile> p;
-    { juce::SpinLock::ScopedLockType sl (profileLock); p = profile; }
-    if (! p) return;
-
     flatq::DesignOptions opt;
     opt.clampToMaxBoost = apvts.getRawParameterValue ("clamp")->load() > 0.5f;
     opt.maxBoostDb      = apvts.getRawParameterValue ("maxboost")->load();
@@ -411,6 +451,16 @@ void FlatQProcessor::redesign()
         opt.trebleGain   = apvts.getRawParameterValue ("treblegain")->load() / 100.0;
     }
     opt.autoPreamp      = apvts.getRawParameterValue ("autopreamp")->load() > 0.5f;
+    return opt;
+}
+
+void FlatQProcessor::redesign()
+{
+    std::shared_ptr<const flatq::Profile> p;
+    { juce::SpinLock::ScopedLockType sl (profileLock); p = profile; }
+    if (! p) return;
+
+    flatq::DesignOptions opt = baseOptions();
     const double fs = sampleRateAtomic.load();
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
     const int nResp = p->channels();                 // 1 = same response on both channels

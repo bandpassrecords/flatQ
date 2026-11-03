@@ -1,6 +1,36 @@
 #include "PluginEditor.h"
 #include <map>
 
+namespace
+{
+    // A small "name this" dialog (text field + OK / Cancel). The callback gets the typed name.
+    void promptName (juce::Component* parent, const juce::String& title, const juce::String& message, const juce::String& initial,
+                     const juce::String& okText, std::function<void (juce::String)> onOk)
+    {
+        auto* w = new juce::AlertWindow (title, message, juce::MessageBoxIconType::NoIcon, parent);
+        w->addTextEditor ("name", initial);
+        w->addButton (okText, 1, juce::KeyPress (juce::KeyPress::returnKey));
+        w->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+        w->enterModalState (true, juce::ModalCallbackFunction::create ([w, onOk] (int r) { if (r == 1) onOk (w->getTextEditorContents ("name").trim()); }), true);
+    }
+
+    // "Export profile": pick where to save a copy of a library profile as a .flatq file.
+    void exportProfileDialog (FlatQProcessor& proc, const juce::File& source, std::unique_ptr<juce::FileChooser>& holder)
+    {
+        auto start = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile (source.getFileNameWithoutExtension() + ".flatq");
+        holder = std::make_unique<juce::FileChooser> ("Export profile", start, "*.flatq");
+        holder->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
+            [&proc, source] (const juce::FileChooser& fc)
+            {
+                auto f = fc.getResult();
+                if (f == juce::File()) return;
+                juce::String err;
+                if (! proc.exportProfile (source, f, err))
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not export", err);
+            });
+    }
+}
+
 // ------------------------------------------------------------------------------------------------ look and feel
 FlatQLookAndFeel::FlatQLookAndFeel()
 {
@@ -379,14 +409,6 @@ void ProfileList::paintListBoxItem (int row, juce::Graphics& g, int w, int h, bo
     g.setColour (divider); g.drawHorizontalLine (h - 1, 0.f, (float) w);
 }
 
-juce::String ProfileList::getTooltipForRow (int row)
-{
-    if (row < 0 || row >= (int) entries.size()) return {};
-    const auto& e = entries[(size_t) row];
-    return e.name + (e.builtIn >= 0 ? "  (built-in)" : e.external ? "  (loaded from " + e.file.getParentDirectory().getFullPathName() + ")" : "  (my profile)")
-         + "  -  click to load, three dots for rename / duplicate / delete";
-}
-
 void ProfileList::listBoxItemClicked (int row, const juce::MouseEvent& e)
 {
     if (row < 0 || row >= (int) entries.size()) return;
@@ -411,15 +433,18 @@ void ProfileList::showMenu (int row, juce::Point<int> screenPos)
     m.addSectionHeader (e.name);
     m.addItem (1, "Rename...", editable);
     m.addItem (2, "Duplicate");
+    m.addItem (4, "Export...");
     m.addItem (3, "Delete", editable);
     if (! editable) m.addSectionHeader (e.builtIn >= 0 ? "Built-in: duplicate it to edit" : "Outside the library: duplicate it to edit");
     m.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (juce::Rectangle<int> (screenPos.x, screenPos.y, 1, 1)).withParentComponent (getTopLevelComponent()),
         [this, e] (int r)
         {
+            syncSelection();   // the row under the three dots was highlighted by the click: show the loaded profile again
             juce::String err;
             if (r == 1) askRename (e);
             else if (r == 2) { report (proc.duplicateProfile (e.builtIn, e.file, err), err); refresh(); }
             else if (r == 3) askDelete (e);
+            else if (r == 4) exportProfileDialog (proc, e.file, chooser);
         });
 }
 
@@ -519,7 +544,7 @@ namespace
     class ManualEqPanel : public juce::Component, private juce::Timer
     {
     public:
-        explicit ManualEqPanel (FlatQProcessor& p) : proc (p)
+        explicit ManualEqPanel (FlatQProcessor& p, std::function<void()> saveAs) : proc (p), onSaveAs (std::move (saveAs))
         {
             const auto& fr = flatq::manualFreqs();
             for (size_t i = 0; i < fr.size(); ++i)
@@ -534,14 +559,12 @@ namespace
                     proc.setManualBand (ch, (int) i, (float) (s->getValue() - base (ch, i)));
                     readout.setText (freqText (flatq::manualFreqs()[i]) + ":  " + juce::String (s->getValue(), 1) + " dB   (designed " + juce::String (base (ch, i), 1) + ")", juce::dontSendNotification);
                 };
-                s->setTooltip (freqText (fr[i]) + ": drag to change this band (dB, before preamp). Double-click to return to the profile's value.");
                 s->addMouseListener (this, false);
                 addAndMakeVisible (s);
             }
             title.setFont (juce::FontOptions (15.f, juce::Font::bold));
             readout.setColour (juce::Label::textColourId, theme::dim);
             link.setToggleState (proc.isManualLinked(), juce::dontSendNotification);
-            link.setTooltip ("On: edits apply to both channels. Off: edit left and right separately");
             link.onClick = [this]
             {
                 proc.setManualLinked (link.getToggleState());
@@ -551,9 +574,9 @@ namespace
             chL.setToggleState (true, juce::dontSendNotification);
             chL.onClick = [this] { ch = 0; refresh (true); };
             chR.onClick = [this] { ch = 1; refresh (true); };
-            chL.setTooltip ("Edit the left channel"); chR.setTooltip ("Edit the right channel");
-            title.setTooltip ("Manual EQ: the sliders show the current equalization; each change is stored as an offset on top of the profile");
-            reset.setTooltip ("Discard the manual changes and return to the profile's own equalization");
+            reset.setTooltip ("Discard the manual changes");
+            saveBtn.onClick = [this] { if (onSaveAs) onSaveAs(); };
+            addAndMakeVisible (saveBtn);
             reset.onClick = [this] { proc.resetManual(); refresh (true); readout.setText ("Back to the profile's equalization", juce::dontSendNotification); };
             for (auto* c : std::initializer_list<juce::Component*> { &title, &readout, &link, &reset }) addAndMakeVisible (c);
             updateChannelUi();
@@ -601,7 +624,8 @@ namespace
             title.setBounds (top.removeFromLeft (200));
             link.setBounds (top.removeFromLeft (100));
             chL.setBounds (top.removeFromLeft (34).reduced (2, 0)); chR.setBounds (top.removeFromLeft (34).reduced (2, 0));
-            reset.setBounds (top.removeFromRight (90));
+            reset.setBounds (top.removeFromRight (90)); top.removeFromRight (6);
+            saveBtn.setBounds (top.removeFromRight (110));
             readout.setBounds (top.reduced (8, 0));
             r.removeFromBottom (18);
             sliderTop = r.getY(); sliderH = r.getHeight();
@@ -641,7 +665,8 @@ namespace
         juce::OwnedArray<juce::Slider> sliders;
         juce::Label readout, title;
         juce::ToggleButton link { "Link L / R" };
-        juce::TextButton chL { "L" }, chR { "R" }, reset { "Reset" };
+        juce::TextButton chL { "L" }, chR { "R" }, reset { "Reset" }, saveBtn { "Save as..." };
+        std::function<void()> onSaveAs;
         int ch = 0, sliderTop = 0, sliderH = 0, lastVersion = -1;
         bool updating = false;
     };
@@ -693,7 +718,6 @@ namespace
         {
             loadLast.setButtonText ("Load the last used profile on start");
             loadLast.setToggleState (FlatQProcessor::getSetting ("loadLastProfile", true), juce::dontSendNotification);
-            loadLast.setTooltip ("A new instance opens with the profile you used last. When off, it opens with the first profile in the list.");
             loadLast.onClick = [this] { FlatQProcessor::setSetting ("loadLastProfile", loadLast.getToggleState()); };
             tips.setButtonText ("Show tooltips");
             tips.setToggleState (FlatQProcessor::getSetting ("tooltips", true), juce::dontSendNotification);
@@ -790,13 +814,7 @@ AddProfileScreen::AddProfileScreen (FlatQProcessor& p) : proc (p)
     importCsv.onClick = [this] { chooseCsv(); };
     for (auto* b : { &loadFile, &importCsv }) { b->setColour (juce::TextButton::buttonColourId, theme::accent); b->setColour (juce::TextButton::textColourOffId, theme::bg); }
 
-    back.setTooltip ("Back to the main window (Esc)");
-    searchBox.setTooltip ("Search the measurements and profiles by name, brand or source. Click a result to create a profile from it.");
-    brandPick.setTooltip ("Browse by manufacturer: pick a brand to list all its headphones.");
-    formFilter.setTooltip ("Only show measurements of this form factor");
-    targetPick.setTooltip ("Target curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear and earbuds. Does not apply to finished AutoEq results or to ready-made profiles.");
-    loadFile.setTooltip ("Load a FlatQ profile (.flatq) or an RME TotalMix profile (.tmreq) from disk");
-    importCsv.setTooltip ("Import your own measurement (CSV with frequency and raw columns), then choose a target. The correction is target - measurement.");
+    targetPick.setTooltip ("The curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear. Not used by finished AutoEq results.");
 
     for (auto* c : std::initializer_list<juce::Component*> { &back, &title, &otherTitle, &brandL, &formL, &targetL, &resultsInfo, &searchBox,
                                                               &brandPick, &formFilter, &targetPick, &results, &loadFile, &importCsv })
@@ -977,13 +995,13 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 
     logo.setFont (juce::FontOptions (26.f, juce::Font::bold));
     brand.setFont (juce::FontOptions (11.f)); brand.setColour (juce::Label::textColourId, theme::dim);
-    brand.setTooltip ("FlatQ by BandPass Records");
     title.setFont (juce::FontOptions (24.f)); title.setMinimumHorizontalScale (0.7f);
     subtitle.setFont (juce::FontOptions (13.f)); subtitle.setColour (juce::Label::textColourId, theme::dim);
     for (auto* l : { &inL, &outL, &trimL }) { l->setJustificationType (juce::Justification::centred); l->setColour (juce::Label::textColourId, theme::dim); l->setFont (juce::FontOptions (12.f)); }
-    trim.setTooltip ("Output volume (total gain = preamp + trim). The red zone is above the safe limit for this profile: the fader can't go there, so the EQ can't clip. Double-click to return to the default.");
-    addButton.setTooltip ("Add a profile: search the measurement database, browse by brand, load a profile file or import a measurement CSV");
+    trim.setTooltip ("Output volume. The red zone is above this profile\'s safe limit. Double-click to reset.");
     addButton.onClick = [this] { openAddScreen(); };
+    saveAsBtn.onClick = [this] { saveAsFlow(); };
+    addChildComponent (saveAsBtn);
     addScreen.onClose = [this] { addScreen.setVisible (false); };
     addScreen.onAdded = [this] { profiles.refresh(); addScreen.setVisible (false); };
     addChildComponent (addScreen);   // last child = on top of everything
@@ -991,9 +1009,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 
     dryWet.setRotaryParameters (juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
     dryWet.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 22);
-    dryWet.setTooltip ("Dry / Wet: mixes the untouched input (aligned with the filter's latency) with the equalized signal. 100 = fully equalized, 0 = untouched. Double-click to reset.");
     dryWetL.setColour (juce::Label::textColourId, theme::dim); dryWetL.setJustificationType (juce::Justification::centredRight);
-    dryWetL.setTooltip (dryWet.getTooltip());
     dryWetA = std::make_unique<SA> (p.apvts, "drywet", dryWet);
     for (auto* l : { &logo, &brand }) l->setInterceptsMouseClicks (false, false);   // clicks go to the About area on top
     logoMark.setInterceptsMouseClicks (false, false);
@@ -1009,7 +1025,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         FlatQProcessor::setSetting ("sidebarVisible", sidebarVisible);
         applySidebarVisibility();
     };
-    menuDots.setTooltip ("Menu: settings and about");
+    menuDots.setTooltip ("Menu");
     menuDots.onClick = [this] { if (! consumeJustClosed (menuDots)) showMenu(); };
     tooltipWindow.setMillisecondsBeforeTipAppears (FlatQProcessor::getSetting ("tooltips", true) ? 450 : 100000000);
     notices.setVisible (false);
@@ -1029,8 +1045,8 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         trim.repaint();
     };
     bypassA = std::make_unique<BA> (p.apvts, "bypass", bypass);
-    skipExport.setTooltip ("Pass audio through untouched while the host renders offline (e.g. Cubase Export Audio Mixdown)");
-    mono.setTooltip ("Mono check: sums the output to mono, (L + R) / 2. Two rings = stereo, one ring = mono.");
+    skipExport.setTooltip ("Pass the audio through untouched while the host renders offline (e.g. Export Audio Mixdown)");
+    mono.setTooltip ("Mono check: sums left and right");
     monoA = std::make_unique<BA> (p.apvts, "mono", mono);
     skipA = std::make_unique<BA> (p.apvts, "bypassexport", skipExport);
 
@@ -1072,7 +1088,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         panel->finish();
         showPanel (std::move (panel), limits);
     };
-    manual.onClick = [this] { showPanel (std::make_unique<ManualEqPanel> (proc), manual); };
+    manual.onClick = [this] { showPanel (std::make_unique<ManualEqPanel> (proc, [safe = juce::Component::SafePointer<FlatQEditor> (this)] { if (safe != nullptr) safe->saveAsFlow(); }), manual); };
     preamp.onClick = [this]
     {
         auto panel = std::make_unique<ParamPanel> (proc.apvts, 340);
@@ -1092,25 +1108,13 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         };
     }
 
-    latency.setTooltip ("Delay added to the audio by the current filter mode (reported to the host). Linear phase = taps / 2, the other modes ~0.");
-    filter.setTooltip ("Filter type: Low latency IIR (peaking biquads, approximate), Linear phase FIR (exact, delayed) or Minimum phase FIR (exact, ~0 latency). Click to change.");
-    length.setTooltip ("Length of the FIR filter in taps (FIR modes only). Longer = more accurate bass. Click to change.");
-    smoothing.setTooltip ("Smoothing of the correction curve, with a separate width for the treble. Click to edit.");
-    limits.setTooltip ("Boost limit, slope limit, bass limit and treble gain. Click to edit.");
-    preamp.setTooltip ("Overall gain applied so the EQ never boosts above 0 dB (auto preamp). Click for options.");
-    manual.setTooltip ("Advanced: shows the current equalization per third-octave band and lets you change each one, for left and right if you want. Click to open.");
-    graph.setTooltip ("Frequency response. Target = the flat line we aim for. Measured = the inverse of the profile (what the speaker or headphone actually does). EQ = the filter applied, which does the opposite of Measured (drawn from 0 dB: the preamp is in the output fader). Result = Measured + EQ, so it should sit on the flat Target. Dashed = boost limit. Click the legend to show/hide curves; drag the left handle to set the bass limit.");
-    inClip.setTooltip ("Clipping indicator for the input: lights up when the signal reaches 0 dBFS and stays lit. Click to reset.");
-    outClip.setTooltip ("Clipping indicator for the output: lights up when the signal reaches 0 dBFS and stays lit. Click to reset.");
+    filter.setTooltip ("Low latency IIR: approximate, no delay. Linear phase FIR: exact, delayed. Minimum phase FIR: exact, no delay.");
+    preamp.setTooltip ("Gain reduction that keeps the EQ from boosting above 0 dB");
+    inClip.setTooltip ("Input clipping: lights up at 0 dBFS. Click to reset.");
+    outClip.setTooltip ("Output clipping: lights up at 0 dBFS. Click to reset.");
     inClip.onReset  = [this] { proc.inClipped = false; inClip.setClipped (false); };
     outClip.onReset = [this] { proc.outClipped = false; outClip.setClipped (false); };
-    inMeter.setTooltip ("Input level (peak, L / R)");
-    outMeter.setTooltip ("Output level (peak, L / R), after the EQ and trim");
-    title.setTooltip ("Current profile");
-    subtitle.setTooltip ("Preamp = gain reduction that keeps the EQ from clipping. Max fit error = largest difference between the target and the filter's response.");
-    bypass.setTooltip ("Calibration on/off. Disabled = the EQ is bypassed (the signal stays delayed by the reported latency so the host stays in sync).");
-    inL.setTooltip ("Input level"); outL.setTooltip ("Output level");
-    trimL.setTooltip ("Output level in dB (preamp + trim)");
+    subtitle.setTooltip ("Preamp: the gain reduction that keeps the EQ from clipping. Max fit error: the largest gap between the target and the filter.");
 
     if (! sidebarVisible) applySidebarVisibility();
 
@@ -1119,6 +1123,20 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     setSize (1220, 660);   // a little wider than before: more room for the graph
     startTimerHz (30);
     timerCallback();
+}
+
+void FlatQEditor::saveAsFlow()
+{
+    juce::Component::SafePointer<FlatQEditor> safe (this);
+    promptName (this, "Save as profile", "Save the current equalization, with your changes, as a new profile.",
+                title.getText() + " (edited)", "Save", [safe] (juce::String name)
+    {
+        if (safe == nullptr || name.isEmpty()) return;
+        juce::String err;
+        if (! safe->proc.saveEqualizationAs (name, err))
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not save", err);
+        safe->profiles.refresh();
+    });
 }
 
 void FlatQEditor::showAbout() { showPanel (std::make_unique<AboutPanel>(), aboutArea); }
@@ -1132,11 +1150,13 @@ void FlatQEditor::showMenu()
 {
     juce::PopupMenu m;
     m.addItem (3, "Add profile...");
+    m.addItem (4, "Save equalization as profile...", proc.getGraphVersion() > 0 && proc.getProfilePath().isNotEmpty());
+    m.addItem (5, "Export current profile...", proc.getProfilePath().isNotEmpty());
     m.addSeparator();
     m.addItem (1, "Settings...");
     m.addItem (2, "About FlatQ");
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&menuDots).withParentComponent (this),
-                     [this] (int r) { markClosed (menuDots); if (r == 1) showSettings(); else if (r == 2) showAbout(); else if (r == 3) openAddScreen(); });
+                     [this] (int r) { markClosed (menuDots); if (r == 1) showSettings(); else if (r == 2) showAbout(); else if (r == 3) openAddScreen(); else if (r == 4) saveAsFlow(); else if (r == 5) exportProfileDialog (proc, juce::File (proc.getProfilePath()), exportChooser); });
 }
 
 void FlatQEditor::applySidebarVisibility()
@@ -1216,6 +1236,10 @@ void FlatQEditor::refreshStatus()
         trimL.setColour (juce::Label::textColourId, trim.muted || (trim.hasLimit && trim.getValue() >= trim.limit - 0.05) ? juce::Colour (0xffef4444) : theme::text);
     }
     graph.setBassLimit (bass > 20.5f ? bass : 0.f);
+    {   // once the equalization was edited by hand, offer to keep it as a profile
+        const bool edited = proc.manualEditedCount() > 0;
+        if (edited != saveAsBtn.isVisible()) { saveAsBtn.setVisible (edited); resized(); }
+    }
     outMeter.mono = a.getRawParameterValue ("mono")->load() > 0.5f;   // mono output: one bar instead of two
     {   // options that change the sound but are not visible: flag them in the middle of the graph
         auto on = [&a] (const char* id) { return a.getRawParameterValue (id)->load() > 0.5f; };
@@ -1292,8 +1316,9 @@ void FlatQEditor::resized()
 
     auto head = r.removeFromTop (headerH);
     menuDots.setBounds (juce::Rectangle<int> (head.getRight() - 42, head.getY() + 12, 30, 30));   // top right
-    sidebarBtn.setBounds (menuDots.getBounds().translated (-36, 0));                               // hide / show the left bar, left of the dots
-    auto titleRow = head.removeFromTop (44).withTrimmedTop (12).withTrimmedRight (88).reduced (20, 0);
+    sidebarBtn.setBounds (menuDots.getBounds().translated (-36, 0));
+    saveAsBtn.setBounds (juce::Rectangle<int> (sidebarBtn.getX() - 172, sidebarBtn.getY() + 1, 164, 28));                               // hide / show the left bar, left of the dots
+    auto titleRow = head.removeFromTop (44).withTrimmedTop (12).withTrimmedRight (88 + (saveAsBtn.isVisible() ? 172 : 0)).reduced (20, 0);
     kindIcon.setBounds (titleRow.removeFromLeft (28).withSizeKeepingCentre (26, 26));   // headphone / speaker, left of the loaded profile
     titleRow.removeFromLeft (10);
     title.setBounds (titleRow);

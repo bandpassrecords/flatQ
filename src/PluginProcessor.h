@@ -62,6 +62,8 @@ public:
     bool importProfileFile (const juce::File& file, juce::String& error);                      // converts to .flatq in the library and loads it
     bool addBuiltInToLibrary (int builtIn, juce::String& error, bool applyHints = true);      // copies an embedded profile into the library and loads it
     bool duplicateProfile (int builtIn, const juce::File& file, juce::String& error);          // builtIn >= 0 or a file
+    bool saveEqualizationAs (const juce::String& name, juce::String& error);                   // the current equalization (limits, smoothing and manual changes baked in) as a new profile
+    bool exportProfile (const juce::File& source, juce::File dest, juce::String& error);      // writes a library profile to a .flatq file anywhere
     bool renameProfile (const juce::File& file, const juce::String& newName, juce::String& error);
     bool deleteProfile (const juce::File& file, juce::String& error);
     static juce::File lastProfileFile();
@@ -92,6 +94,7 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     void parameterChanged (const juce::String&, float) override;
     float outputTrimDb() const;
+    flatq::DesignOptions baseOptions() const;   // the design options from the parameters (manual offsets excluded)
     void applyMute (juce::AudioBuffer<float>&);
     juce::SmoothedValue<float> muteGain, mixGain;
     juce::AudioBuffer<float> dryCopy;
