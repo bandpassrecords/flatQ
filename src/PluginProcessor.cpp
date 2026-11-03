@@ -84,6 +84,11 @@ FlatQProcessor::FlatQProcessor()
         juce::File f (last.fromFirstOccurrenceOf ("file:", false, false));
         if (f.existsAsFile()) loadProfile (f, err);
     }
+
+    bool haveProfile;
+    { juce::SpinLock::ScopedLockType sl (profileLock); haveProfile = (profile != nullptr); }
+    if (! haveProfile)   // nothing used before (or its file is gone): start with the first profile in the list
+        for (auto& f : userProfileFiles()) if (loadProfile (f, err)) break;
 }
 
 static juce::PropertiesFile::Options settingsOptions()

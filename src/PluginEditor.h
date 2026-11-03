@@ -489,6 +489,14 @@ private:
     juce::TooltipWindow tooltipWindow { this, 450 };
     FlatQProcessor& proc;
     ResponseGraph graph;
+    // Standalone only: pick the input (where the system audio arrives) and the output (the device that is equalized)
+    juce::ComboBox inputPick, outputPick;
+    juce::Label inputL { {}, "Input" }, outputL { {}, "Output" };
+    bool isStandalone = false;
+    int deviceTick = 0;
+    juce::StringArray shownIn, shownOut;
+    juce::String shownInSel, shownOutSel;
+    void refreshDevices (bool force);
     ProfileList profiles { proc };
     AddProfileScreen addScreen { proc };            // the "Add a profile" screen (search, brands, file / CSV import)
     juce::TextButton addButton { "+  Add profile" }, saveAsBtn { "Save as profile..." };   // saveAsBtn: shown once the equalization was edited by hand
@@ -516,7 +524,6 @@ private:
     bool faderSync = false;
     double axisPre = 1e9;
     MonoButton mono;
-    juce::ToggleButton skipExport { "Skip on export" };
     StatusItem latency { "Latency", false }, filter { "Filter", true }, length { "FIR length", true },
                smoothing { "Smoothing", true }, limits { "Limits", true }, preamp { "Preamp", true }, manual { "Manual EQ", true };
     int lastVersion = -1;
@@ -529,6 +536,6 @@ private:
     void applySidebarVisibility();
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<BA> bypassA, skipA, monoA, muteA, swapA;
+    std::unique_ptr<BA> bypassA, monoA, muteA, swapA;
     std::unique_ptr<SA> dryWetA;
 };
