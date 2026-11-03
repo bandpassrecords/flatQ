@@ -284,10 +284,11 @@ void LevelMeter::paint (juce::Graphics& g)
     using namespace theme;
     const int gap = 3;
     const int nBars = mono ? 1 : 2;
-    const float bw = ((float) getWidth() - (float) gap * (float) (nBars - 1)) / (float) nBars;
+    const float bw = ((float) getWidth() - (float) gap) / 2.f;                       // one channel's width, also in mono
+    const float x0 = mono ? ((float) getWidth() - bw) / 2.f : 0.f;                    // mono: that single bar is centred
     for (int c = 0; c < nBars; ++c)
     {
-        auto bar = juce::Rectangle<float> ((bw + gap) * (float) c, 0.f, bw, (float) getHeight());
+        auto bar = juce::Rectangle<float> (x0 + (bw + gap) * (float) c, 0.f, bw, (float) getHeight());
         g.setColour (divider); g.fillRoundedRectangle (bar, 2.f);
         const float db = juce::Decibels::gainToDecibels (mono ? juce::jmax (src[0].load(), src[1].load()) : src[(size_t) c].load(), -80.f);
         const float pos = juce::jlimit (0.f, 1.f, (db + 60.f) / 63.f);
