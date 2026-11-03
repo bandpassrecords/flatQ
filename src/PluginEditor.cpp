@@ -737,7 +737,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 {
     setLookAndFeel (&laf);
     for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &brandPick, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logoMark, &logo, &brand, &inL, &outL, &trimL,
-                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
+                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &sidebarBtn, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
     logo.setFont (juce::FontOptions (26.f, juce::Font::bold));
@@ -812,6 +812,16 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     logoMark.setInterceptsMouseClicks (false, false);
     aboutArea.setTooltip ("About FlatQ");
     aboutArea.onClick = [this] { showAbout(); };
+    sidebarVisible = FlatQProcessor::getSetting ("sidebarVisible", true);
+    sidebarBtn.barVisible = sidebarVisible;
+    sidebarBtn.setTooltip ("Hide or show the left bar");
+    sidebarBtn.onClick = [this]
+    {
+        sidebarVisible = ! sidebarVisible;
+        sidebarBtn.barVisible = sidebarVisible;
+        FlatQProcessor::setSetting ("sidebarVisible", sidebarVisible);
+        applySidebarVisibility();
+    };
     menuDots.setTooltip ("Menu: settings and about");
     menuDots.onClick = [this] { showMenu(); };
     tooltipWindow.setMillisecondsBeforeTipAppears (FlatQProcessor::getSetting ("tooltips", true) ? 450 : 100000000);
@@ -936,6 +946,8 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     inL.setTooltip ("Input level"); outL.setTooltip ("Output level");
     trimL.setTooltip ("Output level in dB (preamp + trim)");
 
+    if (! sidebarVisible) applySidebarVisibility();
+
     setResizable (true, true);
     setResizeLimits (860, 520, 1600, 1000);
     setSize (1220, 660);   // a little wider than before: more room for the graph
@@ -959,11 +971,22 @@ void FlatQEditor::showMenu()
                      [this] (int r) { if (r == 1) showSettings(); else if (r == 2) showAbout(); });
 }
 
+void FlatQEditor::applySidebarVisibility()
+{
+    for (auto* c : std::initializer_list<juce::Component*> { &logoMark, &logo, &brand, &aboutArea, &loadButton, &importButton })
+        c->setVisible (sidebarVisible);
+    searchBox.setVisible (sidebarVisible && MeasurementDb::get().available());
+    brandPick.setVisible (sidebarVisible && MeasurementDb::get().available());
+    updateSearch();   // the search results / profile list follow the bar
+    sidebarBtn.repaint();
+    repaint();
+}
+
 void FlatQEditor::updateSearch()
 {
     searching = searchBox.getText().trim().length() >= 2 || selectedBrand.isNotEmpty();
-    for (auto* c : std::initializer_list<juce::Component*> { &formFilter, &targetPick, &resultsInfo, &results }) c->setVisible (searching);
-    profiles.setVisible (! searching);
+    for (auto* c : std::initializer_list<juce::Component*> { &formFilter, &targetPick, &resultsInfo, &results }) c->setVisible (searching && sidebarVisible);
+    profiles.setVisible (! searching && sidebarVisible);
     if (searching)
     {
         static const char* forms[] = { "", "over-ear", "in-ear", "earbud" };
@@ -1118,22 +1141,22 @@ void FlatQEditor::paint (juce::Graphics& g)
 {
     using namespace theme;
     g.fillAll (bg);
-    g.setColour (sidebar); g.fillRect (0, 0, sidebarW, getHeight());
-    g.setColour (panel); g.fillRect (sidebarW, getHeight() - statusH, getWidth() - sidebarW - stripW, statusH);
-    g.fillRect (sidebarW, 0, getWidth() - sidebarW - stripW, headerH);
+    g.setColour (sidebar); g.fillRect (0, 0, sidebarW(), getHeight());
+    g.setColour (panel); g.fillRect (sidebarW(), getHeight() - statusH, getWidth() - sidebarW() - stripW, statusH);
+    g.fillRect (sidebarW(), 0, getWidth() - sidebarW() - stripW, headerH);
     g.setColour (sidebar); g.fillRect (getWidth() - stripW, 0, stripW, getHeight());
     g.setColour (divider);
-    g.drawVerticalLine (sidebarW - 1, 0.f, (float) getHeight());
+    if (sidebarVisible) g.drawVerticalLine (sidebarW() - 1, 0.f, (float) getHeight());
     g.drawVerticalLine (getWidth() - stripW, 0.f, (float) getHeight());
-    g.drawHorizontalLine (headerH - 1, (float) sidebarW, (float) (getWidth() - stripW));
-    g.drawHorizontalLine (getHeight() - statusH, (float) sidebarW, (float) (getWidth() - stripW));
-    g.drawHorizontalLine (64, 0.f, (float) sidebarW);
+    g.drawHorizontalLine (headerH - 1, (float) sidebarW(), (float) (getWidth() - stripW));
+    g.drawHorizontalLine (getHeight() - statusH, (float) sidebarW(), (float) (getWidth() - stripW));
+    if (sidebarVisible) g.drawHorizontalLine (64, 0.f, (float) sidebarW());
 }
 
 void FlatQEditor::resized()
 {
     auto r = getLocalBounds();
-    auto side = r.removeFromLeft (sidebarW);
+    auto side = r.removeFromLeft (sidebarW());
     auto strip = r.removeFromRight (stripW);
 
     auto head64 = side.removeFromTop (64).reduced (16, 0);
@@ -1160,7 +1183,8 @@ void FlatQEditor::resized()
 
     auto head = r.removeFromTop (headerH);
     menuDots.setBounds (juce::Rectangle<int> (head.getRight() - 42, head.getY() + 12, 30, 30));   // top right
-    title.setBounds (head.removeFromTop (44).withTrimmedTop (12).withTrimmedRight (48).reduced (20, 0));
+    sidebarBtn.setBounds (menuDots.getBounds().translated (-36, 0));                               // hide / show the left bar, left of the dots
+    title.setBounds (head.removeFromTop (44).withTrimmedTop (12).withTrimmedRight (88).reduced (20, 0));
     subtitle.setBounds (head.reduced (20, 0).withHeight (20));
 
     auto status = r.removeFromBottom (statusH);

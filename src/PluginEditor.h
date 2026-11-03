@@ -274,6 +274,24 @@ public:
     }
 };
 
+// Hide / show the left bar: a window glyph whose left panel is filled while the bar is visible.
+class SidebarToggle : public juce::Button
+{
+public:
+    SidebarToggle() : juce::Button ("Left bar") {}
+    bool barVisible = true;
+    void paintButton (juce::Graphics& g, bool over, bool) override
+    {
+        auto r = getLocalBounds().toFloat();
+        if (over) { g.setColour (juce::Colour (0xff242424)); g.fillRoundedRectangle (r, 6.f); }
+        auto box = r.withSizeKeepingCentre (18.f, 14.f);
+        g.setColour (over ? theme::text : theme::dim);
+        g.drawRoundedRectangle (box, 2.5f, 1.5f);
+        auto panel = box.withWidth (6.f);
+        if (barVisible) g.fillRoundedRectangle (panel, 1.5f); else g.drawVerticalLine ((int) panel.getRight(), box.getY() + 1.5f, box.getBottom() - 1.5f);
+    }
+};
+
 // Clickable "LABEL / value ^" cell in the bottom status row.
 class StatusItem : public juce::Component, public juce::SettableTooltipClient
 {
@@ -417,7 +435,11 @@ private:
     int lastVersion = -1;
     juce::String lastProfileKey;
     double lastPreamp = 0;
-    static constexpr int sidebarW = 230, stripW = 150, headerH = 72, statusH = 56;
+    static constexpr int stripW = 150, headerH = 72, statusH = 56;
+    bool sidebarVisible = true;
+    int sidebarW() const { return sidebarVisible ? 230 : 0; }   // the left bar can be hidden
+    SidebarToggle sidebarBtn;
+    void applySidebarVisibility();
     std::unique_ptr<juce::FileChooser> chooser;
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
