@@ -956,7 +956,7 @@ void AddProfileScreen::paint (juce::Graphics& g)
         g.setColour (dim); g.setFont (juce::FontOptions (12.f));
         g.drawFittedText (desc, in.removeFromTop (60), juce::Justification::topLeft, 4);
     };
-    card (cardA, "Profile file", "Load a .flatq profile, a Sonarworks (.lvls, .lvlsproj) or an RME TotalMix (.tmreq) profile from disk. It is saved in your library.");
+    card (cardA, "Profile file", "Load a profile from disk. Supported files: .flatq, .lvls, .lvlsproj and .tmreq.");
     card (cardB, "Measurement CSV", "Import your own measurement (a CSV with frequency and raw columns, like the AutoEq ones). You choose the target next.");
 
     g.setColour (dim); g.setFont (juce::FontOptions (13.f));
