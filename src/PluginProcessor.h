@@ -7,8 +7,10 @@
 struct GraphData
 {
     std::vector<float> freqs, ceiling;
-    std::array<std::vector<float>, 2> target, actual;   // dB, preamp included
+    std::array<std::vector<float>, 2> target, actual;   // dB, preamp included: designed EQ curve / achieved filter response
+    std::array<std::vector<float>, 2> measured;         // dB, no preamp: inverse of the raw profile = the response the profile measured
     bool hasCeiling = false, perChannel = false;
+    std::array<std::array<float, 31>, 2> bandBase {};   // target at flatq::manualFreqs() per channel, before manual offsets and preamp
     double preampDb = 0, maxErrDb = 0;
     juce::String name;
 };
@@ -42,16 +44,47 @@ public:
     static int numBuiltInProfiles();
     static juce::String builtInProfileName (int index);       // display name (file name without extension)
     bool loadBuiltInProfile (int index, juce::String& error, bool applyHints = true);
+    static juce::String builtInProfileKind (int index);       // file extension in caps: FLATQ, LVLS, LVLSPROJ, TMREQ
+    // AutoEq import: measurement CSV + one of the bundled (or any) target CSVs -> saved .flatq in importedProfilesDir(), loaded.
+    static int numTargets();
+    static juce::String targetName (int index);
+    static juce::String targetCsvText (int index);
+    static juce::File appDataDir();           // per-user settings folder (Application Support/FlatQ on macOS)
+    static juce::File importedProfilesDir();  // same folder as the user library
+    // --- user profile library (Application Support/FlatQ/Profiles): list, import, duplicate, rename, delete
+    static juce::File userProfilesDir();
+    static juce::Array<juce::File> userProfileFiles();
+    juce::String getProfilePath() const { juce::SpinLock::ScopedLockType sl (profileLock); return profilePath; }
+    bool importProfileFile (const juce::File& file, juce::String& error);                      // converts to .flatq in the library and loads it
+    bool duplicateProfile (int builtIn, const juce::File& file, juce::String& error);          // builtIn >= 0 or a file
+    bool renameProfile (const juce::File& file, const juce::String& newName, juce::String& error);
+    bool deleteProfile (const juce::File& file, juce::String& error);
+    static juce::File lastProfileFile();      // remembers the last profile used, for new instances
+    bool importAutoEq (const juce::File& measurement, const juce::String& targetCsv, const juce::String& targetLabel, juce::String& error);
+    // Manual per-frequency trim (advanced): offsets in dB per flatq::manualFreqs() band, per channel, on top of the target.
+    // While linked, an edit applies to both channels.
+    static int numManualBands() { return (int) flatq::manualFreqs().size(); }
+    float getManualBand (int ch, int i) const { return manualEq[(size_t) ch][(size_t) i].load(); }
+    void setManualBand (int ch, int i, float db) { manualEq[(size_t) ch][(size_t) i] = db; if (manualLinked) manualEq[1 - (size_t) ch][(size_t) i] = db; requestRedesign(); }
+    bool isManualLinked() const { return manualLinked.load(); }
+    void setManualLinked (bool l) { manualLinked = l; if (l) for (size_t i = 0; i < 31; ++i) manualEq[1][i] = manualEq[0][i].load(); requestRedesign(); }
+    void resetManual() { for (auto& c : manualEq) for (auto& b : c) b = 0.f; requestRedesign(); }
+    int manualEditedCount() const { int n = 0; for (size_t i = 0; i < 31; ++i) n += std::abs (manualEq[0][i].load()) > 0.01f || std::abs (manualEq[1][i].load()) > 0.01f; return n; }
     int getBuiltInIndex() const { return builtInIndex.load(); }  // -1 when a custom file is loaded
     juce::String describeProfile() const;
     GraphData getGraph() const { juce::SpinLock::ScopedLockType sl (graphLock); return graph; }
     int getGraphVersion() const { return graphVersion.load(); }
     juce::AudioProcessorValueTreeState apvts;
+    std::array<std::atomic<float>, 2> inPeak { { 0.f, 0.f } }, outPeak { { 0.f, 0.f } };   // linear peak per channel, for the meters
+    double getSampleRate_() const { return sampleRateAtomic.load(); }
 
 private:
-    enum Mode { LowLatency = 0, LinearPhase = 1 };
+    enum Mode { LowLatency = 0, LinearPhase = 1, MinPhase = 2 };
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     void parameterChanged (const juce::String&, float) override;
+    float outputTrimDb() const;
+    void applyMute (juce::AudioBuffer<float>&);
+    juce::SmoothedValue<float> muteGain;
 
     class DesignThread;   // design runs on a background thread (the IIR fit is not cheap)
     std::unique_ptr<DesignThread> designThread;
@@ -59,7 +92,7 @@ private:
     void redesign();
 
     std::shared_ptr<const flatq::Profile> profile;
-    juce::SpinLock profileLock;
+    mutable juce::SpinLock profileLock;
     juce::String profilePath;                 // custom file, empty for built-ins
     std::atomic<int> builtInIndex { -1 };
     bool setProfile (std::shared_ptr<const flatq::Profile>, const juce::String& path, int builtIn, bool applyHints);
@@ -87,6 +120,8 @@ private:
     std::atomic<int> latencyNow { 0 };
     void processDry (juce::AudioBuffer<float>&);
 
+    std::array<std::array<std::atomic<float>, 31>, 2> manualEq;   // [channel][band]; 31 == flatq::manualFreqs().size()
+    std::atomic<bool> manualLinked { true };
     juce::SmoothedValue<float> outGain;
     std::atomic<double> sampleRateAtomic { 48000.0 };
 

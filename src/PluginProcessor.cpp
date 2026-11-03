@@ -1,6 +1,8 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <BinaryData.h>
+#include <TargetData.h>
+#include "AutoEqImport.h"
 
 class FlatQProcessor::DesignThread : public juce::Thread
 {
@@ -25,21 +27,35 @@ juce::AudioProcessorValueTreeState::ParameterLayout FlatQProcessor::createLayout
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout l;
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "mode", 1 }, "Mode",
-           StringArray { "Low latency (IIR)", "Linear phase (FIR)" }, 0));
+           StringArray { "Low latency (IIR)", "Linear phase (FIR)", "Minimum phase (FIR)" }, 2));   // exact and ~0 latency
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "taps", 1 }, "FIR length",
-           StringArray { "4096", "8192", "16384" }, 2));
+           StringArray { "4096", "8192", "16384", "32768", "65536" }, 2));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "iirres", 1 }, "IIR resolution",
+           StringArray { "Normal (6 bands/oct)", "High (48 bands/oct)" }, 0));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "clamp", 1 }, "Respect max boost", true));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "maxboost", 1 }, "Max boost",
            NormalisableRange<float> (0.f, 30.f, 0.5f), 12.f));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "smooth", 1 }, "Smoothing",
            StringArray { "Off", "1/24 oct", "1/12 oct", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct" }, 0));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "treblesmooth", 1 }, "Treble smoothing",
+           StringArray { "Same", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct", "2 oct" }, 0));
+    l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "slope", 1 }, "Max slope (dB/oct)",
+           NormalisableRange<float> (0.f, 36.f, 1.f), 0.f));
+    l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "treblegain", 1 }, "Treble gain (%)",
+           NormalisableRange<float> (0.f, 100.f, 1.f), 100.f));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "basslimit", 1 }, "Bass limit",
-           NormalisableRange<float> (0.f, 200.f, 1.f), 0.f));
+           NormalisableRange<float> (20.f, 200.f, 1.f), 20.f,
+           AudioParameterFloatAttributes()
+               .withStringFromValueFunction ([] (float v, int) { return v <= 20.5f ? String ("Off") : String ((int) v) + " Hz"; })     // 20 Hz (the bottom of the range) = off
+               .withValueFromStringFunction ([] (const String& t) { return t.trim().startsWithIgnoreCase ("off") ? 20.f : t.getFloatValue(); })));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "autopreamp", 1 }, "Auto preamp", true));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypass", 1 }, "Bypass", false));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypassexport", 1 }, "Skip on export (offline render)", true));
+    l.add (std::make_unique<AudioParameterBool>   (ParameterID { "mono", 1 }, "Mono", false));
+    l.add (std::make_unique<AudioParameterBool>   (ParameterID { "mute", 1 }, "Mute output", false));
+    l.add (std::make_unique<AudioParameterBool>   (ParameterID { "swap", 1 }, "Swap L/R", false));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "trim", 1 }, "Output trim",
-           NormalisableRange<float> (-24.f, 12.f, 0.1f), 0.f));
+           NormalisableRange<float> (-72.f, 6.f, 0.1f), 0.f));
     return l;
 }
 
@@ -49,14 +65,33 @@ FlatQProcessor::FlatQProcessor()
       apvts (*this, nullptr, "STATE", createLayout())
 {
     for (auto& b : dryBuf) b.assign (kMaxLatency, 0.0f);
-    for (auto* id : { "mode", "taps", "clamp", "maxboost", "smooth", "basslimit", "autopreamp" }) apvts.addParameterListener (id, this);
+    for (auto& c : manualEq) for (auto& b : c) b = 0.f;
+    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "slope", "treblegain", "basslimit", "autopreamp" }) apvts.addParameterListener (id, this);
     designThread = std::make_unique<DesignThread> (*this);
     designThread->startThread();
+
+    // a fresh instance starts from the last profile used (a host restoring saved state will override this afterwards)
+    juce::String last = lastProfileFile().loadFileAsString().trim(), err;
+    if (last.startsWith ("builtin:"))
+    {
+        for (int i = 0; i < numBuiltInProfiles(); ++i)
+            if (builtInProfileName (i) == last.fromFirstOccurrenceOf ("builtin:", false, false)) { loadBuiltInProfile (i, err); break; }
+    }
+    else if (last.startsWith ("file:"))
+    {
+        juce::File f (last.fromFirstOccurrenceOf ("file:", false, false));
+        if (f.existsAsFile()) loadProfile (f, err);
+    }
+}
+
+juce::File FlatQProcessor::lastProfileFile()
+{
+    return appDataDir().getChildFile ("last_profile.txt");
 }
 
 FlatQProcessor::~FlatQProcessor()
 {
-    for (auto* id : { "mode", "taps", "clamp", "maxboost", "smooth", "basslimit", "autopreamp" }) apvts.removeParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "slope", "treblegain", "basslimit", "autopreamp" }) apvts.removeParameterListener (id, this);
     designThread->stopThread (5000);
 }
 
@@ -65,6 +100,13 @@ bool FlatQProcessor::isBusesLayoutSupported (const BusesLayout& l) const
     return l.getMainOutputChannelSet() == l.getMainInputChannelSet()
         && (l.getMainOutputChannelSet() == juce::AudioChannelSet::stereo()
          || l.getMainOutputChannelSet() == juce::AudioChannelSet::mono());
+}
+
+// Output trim in dB. With auto preamp on (safe headroom) the trim can't go above 0 dB: that is the limit of the profile.
+float FlatQProcessor::outputTrimDb() const
+{
+    const float t = apvts.getRawParameterValue ("trim")->load();
+    return apvts.getRawParameterValue ("autopreamp")->load() > 0.5f ? juce::jmin (t, 0.f) : t;
 }
 
 void FlatQProcessor::parameterChanged (const juce::String&, float) { requestRedesign(); }
@@ -76,7 +118,9 @@ void FlatQProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 2 };
     convolution.prepare (spec);
     outGain.reset (sampleRate, 0.02);
-    outGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("trim")->load()));
+    muteGain.reset (sampleRate, 0.02);
+    muteGain.setCurrentAndTargetValue (apvts.getRawParameterValue ("mute")->load() > 0.5f ? 0.f : 1.f);
+    outGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (outputTrimDb()));
     firReady = false;
     requestRedesign();
 }
@@ -88,13 +132,25 @@ bool FlatQProcessor::setProfile (std::shared_ptr<const flatq::Profile> p, const 
         auto setParam = [this] (const char* id, double v) {
             if (auto* prm = apvts.getParameter (id)) prm->setValueNotifyingHost (prm->convertTo0to1 ((float) v)); };
         setParam ("maxboost", p->d.hintMaxBoostDb >= 0 ? p->d.hintMaxBoostDb : 12.0);
-        setParam ("basslimit", p->d.hintBassLimitHz >= 0 ? p->d.hintBassLimitHz : 0.0);
+        setParam ("basslimit", p->d.hintBassLimitHz >= 0 ? p->d.hintBassLimitHz : 20.0);   // 20 = off
+        auto nearest = [] (const std::vector<double>& widths, double w) {   // index of the closest smoothing width
+            int best = 0; for (int i = 1; i < (int) widths.size(); ++i) if (std::abs (std::log (w / widths[(size_t) i])) < std::abs (std::log (w / widths[(size_t) best]))) best = i;
+            return best; };
+        setParam ("smooth", p->d.hintSmoothOct > 0 ? nearest ({ 0, 1.0 / 24, 1.0 / 12, 1.0 / 6, 1.0 / 3, 0.5, 1.0 }, p->d.hintSmoothOct) : 0);
+        setParam ("treblesmooth", p->d.hintTrebleSmoothOct > 0 ? nearest ({ 0, 1.0 / 6, 1.0 / 3, 0.5, 1.0, 2.0 }, p->d.hintTrebleSmoothOct) : 0);
+        setParam ("slope", p->d.hintSlopeDbOct >= 0 ? p->d.hintSlopeDbOct : 0.0);
     }
+    if (applyHints) for (auto& c : manualEq) for (auto& b : c) b = 0.f;   // a new profile starts from its own equalization
     {
         juce::SpinLock::ScopedLockType sl (profileLock);
         profile = std::move (p);
         profilePath = path;
         builtInIndex = builtIn;
+    }
+    {   // remember it for the next new instance
+        auto f = lastProfileFile();
+        if (f.getParentDirectory().createDirectory().wasOk())
+            f.replaceWithText (builtIn >= 0 ? "builtin:" + builtInProfileName (builtIn) : "file:" + path);
     }
     requestRedesign();
     return true;
@@ -114,6 +170,130 @@ juce::String FlatQProcessor::builtInProfileName (int i)
 {
     if (i < 0 || i >= numBuiltInProfiles()) return {};
     return juce::File (BinaryData::getNamedResourceOriginalFilename (BinaryData::namedResourceList[i])).getFileNameWithoutExtension();
+}
+
+int FlatQProcessor::numTargets() { return FlatQTargetData::namedResourceListSize; }
+
+juce::String FlatQProcessor::targetName (int i)
+{
+    if (i < 0 || i >= numTargets()) return {};
+    return juce::File (FlatQTargetData::getNamedResourceOriginalFilename (FlatQTargetData::namedResourceList[i])).getFileNameWithoutExtension();
+}
+
+juce::File FlatQProcessor::appDataDir()
+{
+    auto d = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);   // ~/Library on macOS
+   #if JUCE_MAC
+    d = d.getChildFile ("Application Support");
+   #endif
+    return d.getChildFile ("FlatQ");
+}
+
+juce::File FlatQProcessor::userProfilesDir() { return appDataDir().getChildFile ("Profiles"); }
+juce::File FlatQProcessor::importedProfilesDir() { return userProfilesDir(); }
+
+juce::Array<juce::File> FlatQProcessor::userProfileFiles()
+{
+    auto files = userProfilesDir().findChildFiles (juce::File::findFiles, false, "*.flatq");
+    std::sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b) { return a.getFileName().compareIgnoreCase (b.getFileName()) < 0; });
+    return files;
+}
+
+namespace
+{
+    // Writes `d` into the user library as "<name>.flatq" (name made unique unless `overwrite`).
+    bool saveToLibrary (flatq::FlatqProfile d, juce::String name, bool overwrite, juce::File& out, juce::String& error)
+    {
+        auto dir = FlatQProcessor::userProfilesDir();
+        if (! dir.createDirectory().wasOk()) { error = "cannot create " + dir.getFullPathName(); return false; }
+        name = name.trim().isEmpty() ? juce::String ("Profile") : name.trim();
+        juce::String unique = name;
+        for (int n = 2; ! overwrite && dir.getChildFile (juce::File::createLegalFileName (unique) + ".flatq").existsAsFile(); ++n) unique = name + " " + juce::String (n);
+        d.name = unique.toStdString();
+        out = dir.getChildFile (juce::File::createLegalFileName (unique) + ".flatq");
+        if (! out.replaceWithText (juce::String (d.serialize()))) { error = "cannot write " + out.getFullPathName(); return false; }
+        return true;
+    }
+}
+
+bool FlatQProcessor::importProfileFile (const juce::File& file, juce::String& error)
+{
+    std::string err;
+    auto p = flatq::Profile::load (file.getFullPathName().toStdString(), &err);
+    if (! p) { error = err; return false; }
+    juce::File out;
+    if (! saveToLibrary (p->d, juce::String (p->name), false, out, error)) return false;
+    return loadProfile (out, error);
+}
+
+bool FlatQProcessor::duplicateProfile (int builtIn, const juce::File& file, juce::String& error)
+{
+    std::shared_ptr<const flatq::Profile> p;
+    std::string err;
+    if (builtIn >= 0)
+    {
+        int size = 0; const char* res = BinaryData::namedResourceList[builtIn];
+        const char* data = BinaryData::getNamedResource (res, size);
+        p = flatq::Profile::loadFromMemory (data, (size_t) size, BinaryData::getNamedResourceOriginalFilename (res), &err);
+    }
+    else p = flatq::Profile::load (file.getFullPathName().toStdString(), &err);
+    if (! p) { error = err; return false; }
+    juce::File out;
+    return saveToLibrary (p->d, juce::String (p->name) + " copy", false, out, error);
+}
+
+bool FlatQProcessor::renameProfile (const juce::File& file, const juce::String& newName, juce::String& error)
+{
+    std::string err;
+    auto p = flatq::Profile::load (file.getFullPathName().toStdString(), &err);
+    if (! p) { error = err; return false; }
+    const auto target = userProfilesDir().getChildFile (juce::File::createLegalFileName (newName.trim()) + ".flatq");
+    if (newName.trim().isEmpty()) { error = "the name is empty"; return false; }
+    if (target != file && target.existsAsFile()) { error = "a profile called \"" + newName.trim() + "\" already exists"; return false; }
+    juce::File out;
+    if (! saveToLibrary (p->d, newName, true, out, error)) return false;
+    const bool wasCurrent = getProfilePath() == file.getFullPathName();
+    if (out != file) file.deleteFile();
+    if (wasCurrent) return loadProfile (out, error, false);
+    return true;
+}
+
+bool FlatQProcessor::deleteProfile (const juce::File& file, juce::String& error)
+{
+    const bool wasCurrent = getProfilePath() == file.getFullPathName();
+    if (! file.moveToTrash() && ! file.deleteFile()) { error = "cannot delete " + file.getFullPathName(); return false; }
+    if (wasCurrent)   // don't keep a profile loaded whose file is gone: fall back to the next one in the library, else the first built-in
+    {
+        for (auto& f : userProfileFiles()) if (loadProfile (f, error)) return true;
+        return numBuiltInProfiles() > 0 ? loadBuiltInProfile (0, error) : true;
+    }
+    return true;
+}
+
+bool FlatQProcessor::importAutoEq (const juce::File& measurement, const juce::String& targetCsv, const juce::String& targetLabel, juce::String& error)
+{
+    if (! measurement.existsAsFile()) { error = "measurement file not found"; return false; }
+    std::string err;
+    const auto name = measurement.getFileNameWithoutExtension() + " @ " + targetLabel;
+    auto prof = flatq::buildAutoEqProfile (measurement.loadFileAsString().toStdString(), targetCsv.toStdString(), name.toStdString(), &err);
+    if (! prof) { error = err; return false; }
+    juce::File out;
+    if (! saveToLibrary (*prof, name, true, out, error)) return false;
+    return loadProfile (out, error);
+}
+
+juce::String FlatQProcessor::targetCsvText (int i)
+{
+    if (i < 0 || i >= numTargets()) return {};
+    int size = 0;
+    const char* data = FlatQTargetData::getNamedResource (FlatQTargetData::namedResourceList[i], size);
+    return juce::String::fromUTF8 (data, size);
+}
+
+juce::String FlatQProcessor::builtInProfileKind (int i)
+{
+    if (i < 0 || i >= numBuiltInProfiles()) return {};
+    return juce::File (BinaryData::getNamedResourceOriginalFilename (BinaryData::namedResourceList[i])).getFileExtension().trimCharactersAtStart (".").toUpperCase();
 }
 
 bool FlatQProcessor::loadBuiltInProfile (int i, juce::String& error, bool applyHints)
@@ -146,32 +326,48 @@ void FlatQProcessor::redesign()
     {
         static const double widths[] = { 0.0, 1.0 / 24, 1.0 / 12, 1.0 / 6, 1.0 / 3, 0.5, 1.0 };
         opt.smoothingOct = widths[juce::jlimit (0, 6, (int) apvts.getRawParameterValue ("smooth")->load())];
-        opt.bassLimitHz  = apvts.getRawParameterValue ("basslimit")->load();
+        static const double tw[] = { 0.0, 1.0 / 6, 1.0 / 3, 0.5, 1.0, 2.0 };
+        opt.trebleSmoothOct = tw[juce::jlimit (0, 5, (int) apvts.getRawParameterValue ("treblesmooth")->load())];
+        { const double bl = apvts.getRawParameterValue ("basslimit")->load(); opt.bassLimitHz = bl > 20.5 ? bl : 0.0; }   // bottom of the range = off
+        opt.maxSlopeDbOct = apvts.getRawParameterValue ("slope")->load();
+        opt.trebleGain   = apvts.getRawParameterValue ("treblegain")->load() / 100.0;
     }
     opt.autoPreamp      = apvts.getRawParameterValue ("autopreamp")->load() > 0.5f;
     const double fs = sampleRateAtomic.load();
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
-    const double pre = flatq::preampDb (*p, opt);
     const int nResp = p->channels();                 // 1 = same response on both channels
-    auto src = [nResp] (int c) { return juce::jmin (c, nResp - 1); };
 
     GraphData g;
-    g.name = juce::String (p->name) + (nResp > 1 ? "  (independent L/R)" : "");
+    for (int c = 0; c < 2; ++c)                      // the equalization as designed, before manual offsets (what the manual EQ shows)
+        for (size_t i = 0; i < 31; ++i) g.bandBase[(size_t) c][i] = (float) flatq::targetDb (*p, juce::jmin (c, nResp - 1), flatq::manualFreqs()[i], opt);
+
+    bool manualDiffers = false;
+    for (size_t i = 0; i < 31; ++i) manualDiffers |= std::abs (manualEq[0][i].load() - manualEq[1][i].load()) > 1e-4f;
+    if (manualEditedCount() > 0)
+        for (size_t c = 0; c < 2; ++c)
+            for (auto& b : manualEq[c]) opt.manualDb[c].push_back (b.load());
+    const int nEff = (nResp > 1 || manualDiffers) ? 2 : 1;   // distinct channel designs
+    const double pre = flatq::preampDb (*p, opt);
+    auto src = [nEff] (int c) { return juce::jmin (c, nEff - 1); };
+
+    g.name = juce::String (p->name);
     g.hasCeiling = opt.clampToMaxBoost;
-    g.perChannel = nResp > 1;
+    g.perChannel = nEff > 1;
     g.preampDb = pre;
-    for (int i = 0; i < 256; ++i)
+    for (int i = 0; i < 640; ++i)
     {
-        const double f = 20.0 * std::pow (1000.0, i / 255.0);
+        const double f = 20.0 * std::pow (1000.0, i / 639.0);
         g.freqs.push_back ((float) f);
         if (g.hasCeiling) g.ceiling.push_back ((float) (std::min (p->ceilingDb (f), opt.maxBoostDb) + pre));
+        for (int c = 0; c < 2; ++c) g.measured[(size_t) c].push_back ((float) -p->correctionDb (src (c), f));
         for (int c = 0; c < 2; ++c) g.target[(size_t) c].push_back ((float) (flatq::targetDb (*p, src (c), f, opt) + pre));
     }
 
     if (mode == LowLatency)
     {
+        const int iirBands = apvts.getRawParameterValue ("iirres")->load() > 0.5f ? 48 : 6;
         flatq::IirDesign d[2];
-        for (int c = 0; c < 2; ++c) d[c] = (c > 0 && nResp == 1) ? d[0] : flatq::designLowLatency (*p, src (c), fs, pre, opt);
+        for (int c = 0; c < 2; ++c) d[c] = (c > 0 && nEff == 1) ? d[0] : flatq::designLowLatency (*p, src (c), fs, pre, opt, iirBands);
         for (int c = 0; c < 2; ++c)
             for (float f : g.freqs)
             {
@@ -197,29 +393,48 @@ void FlatQProcessor::redesign()
     }
     else
     {
-        static const int tapOptions[] = { 4096, 8192, 16384 };
-        const int taps = tapOptions[juce::jlimit (0, 2, (int) apvts.getRawParameterValue ("taps")->load())];
+        static const int tapOptions[] = { 4096, 8192, 16384, 32768, 65536 };
+        const int taps = tapOptions[juce::jlimit (0, 4, (int) apvts.getRawParameterValue ("taps")->load())];
         juce::AudioBuffer<float> ir (2, taps);
         for (int c = 0; c < 2; ++c)
         {
-            auto h = flatq::designLinearPhase (*p, src (c), fs, taps, pre, opt);
+            auto h = mode == MinPhase ? flatq::designMinPhase (*p, src (c), fs, taps, pre, opt)
+                                      : flatq::designLinearPhase (*p, src (c), fs, taps, pre, opt);
             ir.copyFrom (c, 0, h.data(), taps);
-            for (float f : g.freqs)       // actual response = DFT of the taps
-            {
-                std::complex<double> acc = 0;
-                const double w = 2.0 * juce::MathConstants<double>::pi * f / fs;
-                for (int n = 0; n < taps; ++n) acc += (double) h[(size_t) n] * std::polar (1.0, -w * n);
-                g.actual[(size_t) c].push_back ((float) (20.0 * std::log10 (std::abs (acc) + 1e-12)));
+            {   // achieved response: zero-padded FFT of the taps, interpolated at the graph frequencies
+                const size_t N = (size_t) taps * 4;
+                std::vector<std::complex<double>> a (N);
+                for (int n = 0; n < taps; ++n) a[(size_t) n] = (double) h[(size_t) n];
+                flatq::fftInPlace (a, false);
+                for (float f : g.freqs)
+                {
+                    const double pos = (double) f * (double) N / fs;
+                    const size_t i0 = juce::jmin ((size_t) pos, N / 2 - 1);
+                    const double t = pos - (double) i0;
+                    const double m = std::abs (a[i0]) * (1.0 - t) + std::abs (a[i0 + 1]) * t;
+                    g.actual[(size_t) c].push_back ((float) (20.0 * std::log10 (m + 1e-12)));
+                }
             }
         }
         convolution.loadImpulseResponse (std::move (ir), fs, juce::dsp::Convolution::Stereo::yes,
                                          juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
         firReady = true;
-        latencyNow = taps / 2;
-        juce::MessageManager::callAsync ([this, taps] { setLatencySamples (taps / 2); });
+        const int lat = mode == MinPhase ? 0 : taps / 2;
+        latencyNow = lat;
+        juce::MessageManager::callAsync ([this, lat] { setLatencySamples (lat); });
     }
     { juce::SpinLock::ScopedLockType sl (graphLock); graph = std::move (g); }
     ++graphVersion;
+}
+
+void FlatQProcessor::applyMute (juce::AudioBuffer<float>& buffer)
+{
+    muteGain.setTargetValue (apvts.getRawParameterValue ("mute")->load() > 0.5f ? 0.f : 1.f);
+    const int n = buffer.getNumSamples(), nch = juce::jmin (buffer.getNumChannels(), 2);
+    if (muteGain.isSmoothing())
+        for (int i = 0; i < n; ++i) { const float g = muteGain.getNextValue(); for (int c = 0; c < nch; ++c) buffer.getWritePointer (c)[i] *= g; }
+    else if (muteGain.getTargetValue() < 0.5f)
+        buffer.clear();
 }
 
 void FlatQProcessor::processDry (juce::AudioBuffer<float>& buffer)
@@ -248,6 +463,19 @@ void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     const bool manualBypass = apvts.getRawParameterValue ("bypass")->load() > 0.5f;
     const bool skipForExport = apvts.getRawParameterValue ("bypassexport")->load() > 0.5f && isNonRealtime();
+    if (nch == 2 && ! skipForExport && apvts.getRawParameterValue ("swap")->load() > 0.5f)   // input L/R swap
+        std::swap_ranges (buffer.getWritePointer (0), buffer.getWritePointer (0) + n, buffer.getWritePointer (1));
+    auto peakOf = [&] (std::array<std::atomic<float>, 2>& m)
+    {
+        for (int c = 0; c < nch; ++c)
+        {
+            const float pk = buffer.getMagnitude (c, 0, n);
+            const float old = m[(size_t) c].load();
+            m[(size_t) c] = pk > old ? pk : old * 0.92f;   // instant attack, smooth release (per block)
+        }
+    };
+    peakOf (inPeak);
+    struct OutMeter { std::function<void()> f; ~OutMeter() { f(); } } outMeter { [&] { applyMute (buffer); peakOf (outPeak); } };
     if (manualBypass || skipForExport) { processDry (buffer); return; }
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
 
@@ -293,11 +521,17 @@ void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         convolution.process (ctx);
     }
 
-    outGain.setTargetValue (juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("trim")->load()));
+    outGain.setTargetValue (juce::Decibels::decibelsToGain (outputTrimDb()));
     if (outGain.isSmoothing())
         for (int i = 0; i < n; ++i) { const float g = outGain.getNextValue(); for (int c = 0; c < nch; ++c) buffer.getWritePointer (c)[i] *= g; }
     else
         buffer.applyGain (0, n, outGain.getTargetValue());
+
+    if (nch == 2 && apvts.getRawParameterValue ("mono")->load() > 0.5f)    // mono check: (L + R) / 2 on both outputs
+    {
+        float* l = buffer.getWritePointer (0); float* r = buffer.getWritePointer (1);
+        for (int i = 0; i < n; ++i) l[i] = r[i] = 0.5f * (l[i] + r[i]);
+    }
 }
 
 void FlatQProcessor::getStateInformation (juce::MemoryBlock& dest)
@@ -305,6 +539,8 @@ void FlatQProcessor::getStateInformation (juce::MemoryBlock& dest)
     auto state = apvts.copyState();
     state.setProperty ("profilePath", profilePath, nullptr);
     state.setProperty ("builtIn", builtInIndex.load() >= 0 ? builtInProfileName (builtInIndex.load()) : juce::String(), nullptr);
+    for (int c = 0; c < 2; ++c) { juce::StringArray v; for (auto& b : manualEq[(size_t) c]) v.add (juce::String (b.load(), 2)); state.setProperty (c ? "manualEqR" : "manualEqL", v.joinIntoString (","), nullptr); }
+    state.setProperty ("manualLinked", manualLinked.load(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, dest);
 }
 
@@ -327,6 +563,13 @@ void FlatQProcessor::setStateInformation (const void* data, int size)
             juce::File f (tree.getProperty ("profilePath").toString());
             if (f.existsAsFile()) loadProfile (f, err, false);
         }
+        manualLinked = tree.hasProperty ("manualLinked") ? (bool) tree.getProperty ("manualLinked") : true;
+        for (int c = 0; c < 2; ++c)   // after the profile load, which would otherwise be a reason to reset
+        {
+            auto v = juce::StringArray::fromTokens (tree.getProperty (c ? "manualEqR" : "manualEqL").toString(), ",", "");
+            for (int i = 0; i < numManualBands(); ++i) manualEq[(size_t) c][(size_t) i] = i < v.size() ? v[i].getFloatValue() : 0.f;
+        }
+        requestRedesign();
     }
 }
 
