@@ -22,18 +22,23 @@ juce_add_plugin(FlatQ
 # Built-in profiles: everything in profiles/ is embedded in the plugin (BinaryData.h)
 file(GLOB_RECURSE FLATQ_BUILTIN CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/profiles/*.flatq")   # profiles/local/ is git-ignored (personal)
 juce_add_binary_data(FlatQProfiles SOURCES ${FLATQ_BUILTIN})
+# AutoEq targets (MIT, see targets/LICENSE-AutoEq.txt) for the measurement import
+file(GLOB FLATQ_TARGETS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/targets/*.csv")
+juce_add_binary_data(FlatQTargets HEADER_NAME "TargetData.h" NAMESPACE FlatQTargetData SOURCES ${FLATQ_TARGETS})
+set_target_properties(FlatQTargets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(FlatQProfiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_sources(FlatQ PRIVATE src/PluginProcessor.cpp src/PluginEditor.cpp)
 target_include_directories(FlatQ PRIVATE src)
 target_compile_definitions(FlatQ PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(FlatQ PRIVATE FlatQProfiles juce::juce_audio_utils juce::juce_dsp
+target_link_libraries(FlatQ PRIVATE FlatQProfiles FlatQTargets juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 # Tools (no JUCE) and tests
 add_executable(lvls_dump tools/lvls_dump.cpp)
 add_executable(design_test tools/design_test.cpp)
 add_executable(flatq_convert tools/flatq_convert.cpp)
+add_executable(autoeq_import tools/autoeq_import.cpp)
 
 enable_testing()
 file(GLOB_RECURSE FLATQ_PROFILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/profiles/*.flatq")
