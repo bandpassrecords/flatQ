@@ -794,7 +794,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         auto panel = std::make_unique<ParamPanel> (proc.apvts, 420);
         panel->addToggle ("Respect max boost", "clamp", "Limit boosts to the global maximum and the profile's own ceiling");
         panel->addSlider ("Max boost", "maxboost", " dB", "Global limit for boosts. The profile's own ceiling (dashed line) also applies.");
-        panel->addSlider ("Max slope", "maxslope", {}, "Boosts may not rise faster than this: the further left, the stricter (the maximum is off). Cuts narrow spikes while keeping broad corrections. AutoEq uses 18 dB/oct.");
+        panel->addSlider ("Max slope", "maxslope", {}, "Limits how fast the BOOSTS may rise, in dB per octave: the further left, the stricter (the maximum is off). Narrow boosts, usually in the treble, are cut first; cuts are never limited, so the curve can sit a little lower there. AutoEq uses 18 dB/oct.");
         panel->addSlider ("Bass limit", "basslimit", {}, "Correction fades out below this frequency (the lowest setting is off). Use it when the speaker cannot reproduce deep bass. Also draggable on the graph.");
         panel->addSlider ("Treble gain", "treblegain", " %", "Scales the correction above about 4-8 kHz. 100 % = untouched, 0 % = no treble correction.");
         panel->finish();
