@@ -954,17 +954,17 @@ void AddProfileScreen::paint (juce::Graphics& g)
         g.setColour (text); g.setFont (juce::FontOptions (14.f, juce::Font::bold));
         g.drawText (head, in.removeFromTop (22), juce::Justification::centredLeft);
         g.setColour (dim); g.setFont (juce::FontOptions (12.f));
-        g.drawFittedText (desc, in.removeFromTop (60), juce::Justification::topLeft, 4);
+        g.drawFittedText (desc, in.removeFromTop (60), juce::Justification::topLeft, 4, 1.0f);   // 1.0: wrap, never squash the glyphs
     };
     card (cardA, "Profile file", "Load a profile from disk: a FlatQ profile (.flatq) or an RME TotalMix profile (.tmreq).");
     card (cardB, "Measurement CSV", "Import your own measurement (a CSV with frequency and raw columns, like the AutoEq ones). You choose the target next.");
 
     g.setColour (dim); g.setFont (juce::FontOptions (13.f));
     if (! MeasurementDb::get().available())
-        g.drawFittedText ("The measurement database is not part of this build.\nUse a profile file or your own CSV.", getLocalBounds().withTrimmedRight (400).reduced (32, 80), juce::Justification::topLeft, 4);
+        g.drawFittedText ("The measurement database is not part of this build.\nUse a profile file or your own CSV.", getLocalBounds().withTrimmedRight (400).reduced (32, 80), juce::Justification::topLeft, 4, 1.0f);
     else if (! searching)
         g.drawFittedText (juce::String (MeasurementDb::get().size()) + " measurements and profiles from AutoEq and others.\nType a name above, or pick a brand, to list them.",
-                          resultsRect.reduced (2, 6), juce::Justification::topLeft, 4);
+                          resultsRect.reduced (2, 6), juce::Justification::topLeft, 4, 1.0f);
 }
 
 // ------------------------------------------------------------------------------------------------ editor
