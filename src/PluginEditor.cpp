@@ -788,6 +788,9 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         searchBox.setColour (juce::TextEditor::highlightedTextColourId, theme::text);
         searchBox.setColour (juce::TextEditor::focusedOutlineColourId, theme::accent);
         searchBox.setFont (juce::FontOptions (13.f));
+        searchBox.setJustification (juce::Justification::centredLeft);   // single-line field: text (and the placeholder) centred vertically
+        searchBox.setIndents (8, 0);
+        searchBox.setBorder ({ 0, 0, 0, 0 });
         searchBox.setTooltip ("Search the AutoEq measurements (name, brand, source). Click a result to create a profile from it: the correction is target - measurement.");
         formFilter.setTooltip ("Only show measurements of this form factor");
         targetPick.setTooltip ("Target curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear and earbuds.");
