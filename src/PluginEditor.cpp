@@ -1,22 +1,5 @@
 #include "PluginEditor.h"
-#if JucePlugin_Build_Standalone
- #include <juce_audio_utils/juce_audio_utils.h>   // the standalone holder header needs the audio device classes declared first
- #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
-#endif
 #include <map>
-
-namespace
-{
-    // The standalone app's audio device manager (null when running as a plugin inside a host).
-    juce::StandalonePluginHolder* standaloneHolder (FlatQProcessor& proc)
-    {
-       #if JucePlugin_Build_Standalone
-        if (proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone) return juce::StandalonePluginHolder::getInstance();
-       #endif
-        juce::ignoreUnused (proc);
-        return nullptr;
-    }
-}
 
 namespace
 {
@@ -1025,40 +1008,6 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     for (auto* l : { &inL, &outL, &trimL }) { l->setJustificationType (juce::Justification::centred); l->setColour (juce::Label::textColourId, theme::dim); l->setFont (juce::FontOptions (12.f)); }
     trim.setTooltip ("Output volume. The red zone is above this profile\'s safe limit. Double-click to reset.");
     addButton.onClick = [this] { openAddScreen(); };
-    isStandalone = standaloneHolder (proc) != nullptr;
-    for (auto* c : std::initializer_list<juce::Component*> { &inputPick, &outputPick, &inputL, &outputL })
-    {
-        addChildComponent (c);
-        c->setVisible (isStandalone);
-    }
-    for (auto* l : { &inputL, &outputL }) { l->setFont (juce::FontOptions (11.f)); l->setColour (juce::Label::textColourId, theme::dim); }
-    inputPick.setTooltip ("Where the sound to equalize arrives. To equalize everything this computer plays, send the system output to a virtual loopback device and pick it here.");
-    outputPick.onChange = [this]
-    {
-        auto* h = standaloneHolder (proc);
-        if (h == nullptr) return;
-        if (outputPick.getSelectedId() == 1000) { h->showAudioSettingsDialog(); refreshDevices (true); return; }
-        auto setup = h->deviceManager.getAudioDeviceSetup();
-        setup.outputDeviceName = outputPick.getText();
-        setup.useDefaultOutputChannels = true;
-        const auto err = h->deviceManager.setAudioDeviceSetup (setup, true);
-        if (err.isNotEmpty()) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not use this output", err);
-        refreshDevices (true);
-    };
-    inputPick.onChange = [this]
-    {
-        auto* h = standaloneHolder (proc);
-        if (h == nullptr) return;
-        auto setup = h->deviceManager.getAudioDeviceSetup();
-        setup.inputDeviceName = inputPick.getText();
-        setup.useDefaultInputChannels = true;
-        const auto err = h->deviceManager.setAudioDeviceSetup (setup, true);
-        if (err.isNotEmpty()) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not use this input", err);
-        else h->shouldMuteInput.setValue (false);   // the input was picked on purpose, so let it through
-        refreshDevices (true);
-    };
-    refreshDevices (true);
-
     saveAsBtn.onClick = [this] { saveAsFlow(); };
     addChildComponent (saveAsBtn);
     addScreen.onClose = [this] { addScreen.setVisible (false); };
@@ -1182,31 +1131,6 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     timerCallback();
 }
 
-void FlatQEditor::refreshDevices (bool force)
-{
-    auto* h = standaloneHolder (proc);
-    if (h == nullptr) return;
-    auto& dm = h->deviceManager;
-    auto* type = dm.getCurrentDeviceTypeObject();
-    if (type == nullptr) return;
-    const auto ins = type->getDeviceNames (true), outs = type->getDeviceNames (false);
-    const auto setup = dm.getAudioDeviceSetup();
-    // an empty name in the setup means "the system default device"
-    const auto curIn  = setup.inputDeviceName.isNotEmpty()  ? setup.inputDeviceName  : (ins.isEmpty()  ? juce::String() : ins[juce::jlimit (0, ins.size() - 1, type->getDefaultDeviceIndex (true))]);
-    const auto curOut = setup.outputDeviceName.isNotEmpty() ? setup.outputDeviceName : (outs.isEmpty() ? juce::String() : outs[juce::jlimit (0, outs.size() - 1, type->getDefaultDeviceIndex (false))]);
-    if (! force && ins == shownIn && outs == shownOut && curIn == shownInSel && curOut == shownOutSel) return;
-    shownIn = ins; shownOut = outs; shownInSel = curIn; shownOutSel = curOut;
-
-    inputPick.clear (juce::dontSendNotification);
-    outputPick.clear (juce::dontSendNotification);
-    for (int i = 0; i < ins.size(); ++i)  inputPick.addItem (ins[i], i + 1);
-    for (int i = 0; i < outs.size(); ++i) outputPick.addItem (outs[i], i + 1);
-    outputPick.addSeparator();
-    outputPick.addItem ("Audio settings...", 1000);
-    inputPick.setSelectedId (ins.indexOf (curIn) + 1, juce::dontSendNotification);
-    outputPick.setSelectedId (outs.indexOf (curOut) + 1, juce::dontSendNotification);
-}
-
 void FlatQEditor::saveAsFlow()
 {
     juce::Component::SafePointer<FlatQEditor> safe (this);
@@ -1245,7 +1169,6 @@ void FlatQEditor::applySidebarVisibility()
 {
     for (auto* c : std::initializer_list<juce::Component*> { &logoMark, &logo, &brand, &aboutArea, &addButton, &profiles })
         c->setVisible (sidebarVisible);
-    for (auto* c : std::initializer_list<juce::Component*> { &inputPick, &outputPick, &inputL, &outputL }) c->setVisible (sidebarVisible && isStandalone);
     sidebarBtn.repaint();
     repaint();
 }
@@ -1347,7 +1270,6 @@ void FlatQEditor::timerCallback()
 {
     inMeter.repaint(); outMeter.repaint();
     inClip.setClipped (proc.inClipped.load()); outClip.setClipped (proc.outClipped.load());
-    if (isStandalone && ++deviceTick >= 90 && ! inputPick.isPopupActive() && ! outputPick.isPopupActive()) { deviceTick = 0; refreshDevices (false); }   // devices come and go
     const int v = proc.getGraphVersion();
     if (v != lastVersion)
     {
@@ -1394,13 +1316,6 @@ void FlatQEditor::resized()
     head64.removeFromLeft (10);
     logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it 
     brand.setBounds (head64.removeFromTop (16).withTrimmedLeft (3));
-    if (isStandalone)   // the device pickers sit under the logo
-    {
-        auto dev = side.removeFromTop (84).reduced (12, 8);
-        auto row1 = dev.removeFromTop (30); dev.removeFromTop (6); auto row2 = dev.removeFromTop (30);
-        outputL.setBounds (row1.removeFromLeft (50)); outputPick.setBounds (row1);
-        inputL.setBounds (row2.removeFromLeft (50));  inputPick.setBounds (row2);
-    }
     addButton.setBounds (side.removeFromBottom (52).reduced (12, 8));
     profiles.setBounds (side);
     addScreen.setBounds (getLocalBounds());

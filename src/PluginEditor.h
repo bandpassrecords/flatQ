@@ -489,14 +489,6 @@ private:
     juce::TooltipWindow tooltipWindow { this, 450 };
     FlatQProcessor& proc;
     ResponseGraph graph;
-    // Standalone only: pick the input (where the system audio arrives) and the output (the device that is equalized)
-    juce::ComboBox inputPick, outputPick;
-    juce::Label inputL { {}, "Input" }, outputL { {}, "Output" };
-    bool isStandalone = false;
-    int deviceTick = 0;
-    juce::StringArray shownIn, shownOut;
-    juce::String shownInSel, shownOutSel;
-    void refreshDevices (bool force);
     ProfileList profiles { proc };
     AddProfileScreen addScreen { proc };            // the "Add a profile" screen (search, brands, file / CSV import)
     juce::TextButton addButton { "+  Add profile" }, saveAsBtn { "Save as profile..." };   // saveAsBtn: shown once the equalization was edited by hand
