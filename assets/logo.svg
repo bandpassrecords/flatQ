@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#20242b"/>
-      <stop offset="1" stop-color="#0f1115"/>
+      <stop offset="0" stop-color="#262626"/>
+      <stop offset="1" stop-color="#0e0e0e"/>
     </linearGradient>
     <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#22d3ee"/>
-      <stop offset="1" stop-color="#4ade80"/>
+      <stop offset="0" stop-color="#7fe0a4"/>
+      <stop offset="1" stop-color="#46c47c"/>
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <line x1="64" y1="256" x2="448" y2="256" stroke="#5b6677" stroke-width="8" stroke-linecap="round" stroke-dasharray="2 22"/>
+  <line x1="64" y1="256" x2="448" y2="256" stroke="#6b6b6b" stroke-width="8" stroke-linecap="round" stroke-dasharray="2 22"/>
   <!-- an EQ curve whose ripples die out into the flat line: the correction that makes it flat -->
   <path d="M64 256 C90 256 95 150 125 150 S160 350 195 350 S225 205 255 205 S285 300 315 300 S340 232 372 240 S410 256 448 256"
         fill="none" stroke="url(#wave)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>

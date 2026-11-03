@@ -4,17 +4,18 @@
 
 namespace theme
 {
-    const juce::Colour bg       { 0xff121418 };   // window / graph
-    const juce::Colour panel    { 0xff1a1d22 };   // header, status row, popups
-    const juce::Colour sidebar  { 0xff16181c };
-    const juce::Colour divider  { 0xff262a31 };
-    const juce::Colour track    { 0xff6b7586 };   // unfilled part of sliders: clearly lighter than the panels so the groove reads
-    const juce::Colour text     { 0xffe6e8eb };
-    const juce::Colour dim      { 0xff8a909a };
-    const juce::Colour accent   { 0xff22d3ee };   // selection, active controls
-    const juce::Colour good     { 0xff4ade80 };   // correction target (mono) / meters
-    const juce::Colour result   { 0xffe879f9 };   // achieved response
-    const juce::Colour chanL    { 0xff4cc9f0 };
+    // Neutral dark greys only (no blue anywhere); one muted green accent, plus amber / orange / pink for the curves.
+    const juce::Colour bg       { 0xff121212 };   // window / graph
+    const juce::Colour panel    { 0xff1b1b1b };   // header, status row, popups
+    const juce::Colour sidebar  { 0xff161616 };
+    const juce::Colour divider  { 0xff2b2b2b };
+    const juce::Colour track    { 0xff6b6b6b };   // unfilled part of sliders: clearly lighter than the panels so the groove reads
+    const juce::Colour text     { 0xffe8e8e8 };
+    const juce::Colour dim      { 0xff8d8d8d };
+    const juce::Colour accent   { 0xff46c47c };   // selection, active controls, the EQ curve, meters
+    const juce::Colour good     { 0xffcfcfcf };   // the flat target line
+    const juce::Colour result   { 0xfff472b6 };   // achieved response
+    const juce::Colour chanL    { 0xff9be15d };
     const juce::Colour chanR    { 0xfff4a259 };
 }
 
@@ -25,7 +26,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto r = getLocalBounds().toFloat();
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff20242b), 0.f, r.getY(), juce::Colour (0xff0f1115), 0.f, r.getBottom(), false));
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff262626), 0.f, r.getY(), juce::Colour (0xff0e0e0e), 0.f, r.getBottom(), false));
         g.fillRoundedRectangle (r, r.getWidth() * 0.22f);
         const float k = r.getWidth() / 512.f;
         auto P = [&] (float x, float y) { return juce::Point<float> (r.getX() + x * k, r.getY() + y * k); };
@@ -33,7 +34,7 @@ public:
         auto c = [&] (float x1, float y1, float x2, float y2, float x3, float y3) { w.cubicTo (P (x1, y1), P (x2, y2), P (x3, y3)); };
         c (90, 256, 95, 150, 125, 150); c (155, 150, 160, 350, 195, 350); c (230, 350, 225, 205, 255, 205);
         c (285, 205, 285, 300, 315, 300); c (345, 300, 340, 232, 372, 240); c (404, 248, 410, 256, 448, 256);
-        g.setGradientFill (juce::ColourGradient (theme::accent, P (64, 0).x, 0.f, theme::good, P (448, 0).x, 0.f, false));
+        g.setGradientFill (juce::ColourGradient (theme::accent.brighter (0.6f), P (64, 0).x, 0.f, theme::accent, P (448, 0).x, 0.f, false));
         g.strokePath (w, juce::PathStrokeType (30.f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 };
@@ -93,7 +94,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff23272e)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
         const auto c = r.getCentre(); const float rad = 8.f;
         const bool on = getToggleState();
         g.setColour (on ? theme::accent : (over ? theme::text : theme::dim));
@@ -143,7 +144,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff23272e)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
         const auto c = r.getCentre(); const bool muted = getToggleState();
         const auto col = muted ? juce::Colour (0xffef4444) : (over ? theme::text : theme::dim);
         juce::Path body; body.addTriangle (c.x - 2.f, c.y - 6.f, c.x - 2.f, c.y + 6.f, c.x - 9.f, c.y);
@@ -164,7 +165,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff23272e)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
         const auto c = r.getCentre(); const bool on = getToggleState();
         g.setColour (on ? theme::accent : (over ? theme::text : theme::dim));
         auto arrow = [&] (float y, float dir)   // dir +1 points right, -1 points left
@@ -187,9 +188,9 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff23272e)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
         const bool enabled = ! getToggleState();
-        const auto col = enabled ? theme::good : theme::dim;
+        const auto col = enabled ? theme::accent : theme::dim;
         const juce::Point<float> c (r.getX() + 24.f, r.getCentreY());
         juce::Path p; p.addCentredArc (c.x, c.y, 9.f, 9.f, 0.f, 0.55f, juce::MathConstants<float>::twoPi - 0.55f, true);
         p.startNewSubPath (c.x, c.y - 12.f); p.lineTo (c.x, c.y - 1.f);
@@ -268,7 +269,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff23272e)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
         g.setColour (over ? theme::text : theme::dim);
         for (int i = -1; i <= 1; ++i) g.fillEllipse (r.getCentreX() - 2.f, r.getCentreY() + (float) i * 6.f - 2.f, 4.f, 4.f);
     }

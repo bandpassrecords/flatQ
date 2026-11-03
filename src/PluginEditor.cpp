@@ -13,7 +13,7 @@ FlatQLookAndFeel::FlatQLookAndFeel()
     setColour (juce::Slider::backgroundColourId, track);
     setColour (juce::Slider::textBoxTextColourId, text);
     setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff23272e));
+    setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff262626));
     setColour (juce::ComboBox::outlineColourId, divider);
     setColour (juce::ComboBox::textColourId, text);
     setColour (juce::ComboBox::arrowColourId, dim);
@@ -24,10 +24,13 @@ FlatQLookAndFeel::FlatQLookAndFeel()
     setColour (juce::BubbleComponent::backgroundColourId, panel);
     setColour (juce::BubbleComponent::outlineColourId, divider);
     setColour (juce::ListBox::backgroundColourId, sidebar);
+    setColour (juce::TextEditor::highlightColourId, accent.withAlpha (0.35f));
+    setColour (juce::CaretComponent::caretColourId, accent);
+    setColour (juce::Slider::rotarySliderOutlineColourId, track);
     setColour (juce::ToggleButton::textColourId, text);
     setColour (juce::ToggleButton::tickColourId, accent);
     setColour (juce::ToggleButton::tickDisabledColourId, dim);
-    setColour (juce::TextButton::buttonColourId, juce::Colour (0xff23272e));
+    setColour (juce::TextButton::buttonColourId, juce::Colour (0xff262626));
     setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffef4444));
     setColour (juce::TextButton::textColourOffId, text);
     setColour (juce::TextButton::textColourOnId, juce::Colours::white);
@@ -150,7 +153,7 @@ void ResponseGraph::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (11.f));
     for (float db = -range; db <= range + 0.1f; db += 6.f)
     {
-        g.setColour (db == 0 ? juce::Colour (0xff4a505a) : divider);
+        g.setColour (db == 0 ? juce::Colour (0xff4a4a4a) : divider);
         g.drawHorizontalLine ((int) yOf (db), plot.getX(), plot.getRight());
         g.setColour (dim);
         g.drawText ((db > 0 ? "+" : "") + juce::String ((int) db) + "dB", (int) plot.getRight() + 6, (int) yOf (db) - 7, 48, 14, juce::Justification::centredLeft);
@@ -159,7 +162,7 @@ void ResponseGraph::paint (juce::Graphics& g)
                      1000.f, 2000.f, 3000.f, 4000.f, 5000.f, 6000.f, 7000.f, 8000.f, 9000.f, 10000.f, 20000.f })
     {
         const bool major = f == 20.f || f == 100.f || f == 1000.f || f == 10000.f || f == 20000.f;
-        g.setColour (major ? juce::Colour (0xff30353d) : divider.withAlpha (0.6f));
+        g.setColour (major ? juce::Colour (0xff343434) : divider.withAlpha (0.6f));
         g.drawVerticalLine ((int) xOf (f), plot.getY(), plot.getBottom());
     }
     for (float f : { 20.f, 50.f, 100.f, 200.f, 500.f, 1000.f, 2000.f, 5000.f, 10000.f, 20000.f })
@@ -295,7 +298,7 @@ void LevelMeter::paint (juce::Graphics& g)
         held[c] = juce::jmax (pos, held[c] - 0.006f);
         auto fill = bar.withTop (bar.getBottom() - bar.getHeight() * pos);
         g.setGradientFill (juce::ColourGradient (juce::Colour (0xffef4444), 0.f, bar.getY(),
-                           good, 0.f, bar.getY() + bar.getHeight() * 0.25f, false));
+                           accent, 0.f, bar.getY() + bar.getHeight() * 0.25f, false));
         g.fillRoundedRectangle (fill, 2.f);
         if (held[c] > 0.01f) { g.setColour (text.withAlpha (0.8f)); g.fillRect (bar.getX(), bar.getBottom() - bar.getHeight() * held[c], bw, 1.5f); }
     }
@@ -305,7 +308,7 @@ void LevelMeter::paint (juce::Graphics& g)
 void StatusItem::paint (juce::Graphics& g)
 {
     using namespace theme;
-    if (hover && canClick) { g.setColour (juce::Colour (0xff22262c)); g.fillRect (getLocalBounds()); }
+    if (hover && canClick) { g.setColour (juce::Colour (0xff232323)); g.fillRect (getLocalBounds()); }
     g.setColour (divider); g.drawVerticalLine (0, 10.f, (float) getHeight() - 10.f);
     g.setColour (dim); g.setFont (juce::FontOptions (12.f));
     g.drawText (label, 14, 10, getWidth() - 20, 16, juce::Justification::centredLeft);
@@ -591,7 +594,7 @@ namespace
             for (int db : { 18, 12, 6, 0, -6, -12, -18 })
             {
                 const float y = (float) sliderTop + 6.f + (float) (sliderH - 12) * (18.f - (float) db) / 36.f;
-                g.setColour (db == 0 ? juce::Colour (0xff4a505a) : theme::divider); g.drawHorizontalLine ((int) y, 40.f, (float) getWidth() - 10.f);
+                g.setColour (db == 0 ? juce::Colour (0xff4a4a4a) : theme::divider); g.drawHorizontalLine ((int) y, 40.f, (float) getWidth() - 10.f);
                 g.setColour (theme::dim); g.drawText ((db > 0 ? "+" : "") + juce::String (db), 4, (int) y - 5, 32, 10, juce::Justification::centredRight);
             }
         }
@@ -778,9 +781,11 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         for (int i = 0; i < FlatQProcessor::numTargets(); ++i) targetPick.addItem (FlatQProcessor::targetName (i), i + 2);
         targetPick.setSelectedId (1, juce::dontSendNotification);
         searchBox.setTextToShowWhenEmpty ("Search " + juce::String (db.size()) + " measurements...", theme::dim);
-        searchBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff23272e));
+        searchBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff262626));
         searchBox.setColour (juce::TextEditor::textColourId, theme::text);
         searchBox.setColour (juce::TextEditor::outlineColourId, theme::divider);
+        searchBox.setColour (juce::TextEditor::highlightColourId, theme::accent.withAlpha (0.35f));
+        searchBox.setColour (juce::TextEditor::highlightedTextColourId, theme::text);
         searchBox.setColour (juce::TextEditor::focusedOutlineColourId, theme::accent);
         searchBox.setFont (juce::FontOptions (13.f));
         searchBox.setTooltip ("Search the AutoEq measurements (name, brand, source). Click a result to create a profile from it: the correction is target - measurement.");
