@@ -33,12 +33,8 @@ inline bool parseAutoEqCsv(const std::string& text, CsvCurve& out, std::string* 
     return true;
 }
 
-inline std::optional<FlatqProfile> buildAutoEqProfile(const std::string& measurementCsv, const std::string& targetCsv,
-                                                      const std::string& name, std::string* err = nullptr, double maxBoostDb = 6.0) {
-    CsvCurve m, t;
-    std::string e;
-    if (!parseAutoEqCsv(measurementCsv, m, &e)) { if (err) *err = "measurement: " + e; return std::nullopt; }
-    if (!parseAutoEqCsv(targetCsv, t, &e)) { if (err) *err = "target: " + e; return std::nullopt; }
+// Correction = target - measurement, both centred at 1 kHz, on a 960-point log grid.
+inline FlatqProfile buildAutoEqProfile(const CsvCurve& m, const CsvCurve& t, const std::string& name, double maxBoostDb = 6.0) {
     const double m1k = interpDb(m.freq, m.db, 1000.0), t1k = interpDb(t.freq, t.db, 1000.0);
     FlatqProfile p; p.name = name; p.sameBoth = true;
     const int n = 960;   // ~96 points/octave: finer than the AutoEq data itself (~70/oct)
@@ -51,6 +47,15 @@ inline std::optional<FlatqProfile> buildAutoEqProfile(const std::string& measure
     p.ceilFreq = c.freq; p.ceilGain.assign(c.freq.size(), maxBoostDb);
     p.hintMaxBoostDb = maxBoostDb; p.hintSmoothOct = 1.0 / 12; p.hintTrebleSmoothOct = 2.0; p.hintSlopeDbOct = 18;
     return p;
+}
+
+inline std::optional<FlatqProfile> buildAutoEqProfile(const std::string& measurementCsv, const std::string& targetCsv,
+                                                      const std::string& name, std::string* err = nullptr, double maxBoostDb = 6.0) {
+    CsvCurve m, t;
+    std::string e;
+    if (!parseAutoEqCsv(measurementCsv, m, &e)) { if (err) *err = "measurement: " + e; return std::nullopt; }
+    if (!parseAutoEqCsv(targetCsv, t, &e)) { if (err) *err = "target: " + e; return std::nullopt; }
+    return buildAutoEqProfile(m, t, name, maxBoostDb);
 }
 
 } // namespace flatq

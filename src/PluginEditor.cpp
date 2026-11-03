@@ -648,7 +648,7 @@ namespace
 FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
     setLookAndFeel (&laf);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &loadButton, &importButton, &title, &subtitle, &logo, &inL, &outL, &trimL,
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logo, &inL, &outL, &trimL,
                                                               &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &disabledCard, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
@@ -657,6 +657,39 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     subtitle.setFont (juce::FontOptions (13.f)); subtitle.setColour (juce::Label::textColourId, theme::dim);
     for (auto* l : { &inL, &outL, &trimL }) { l->setJustificationType (juce::Justification::centred); l->setColour (juce::Label::textColourId, theme::dim); l->setFont (juce::FontOptions (12.f)); }
     trim.setTooltip ("Output volume (total gain = preamp + trim). The red zone is above the safe limit for this profile: the fader can't go there, so the EQ can't clip. Double-click to return to the default.");
+    // measurement search (only when the pack was built into the plugin)
+    {
+        auto& db = MeasurementDb::get();
+        searchBox.setVisible (db.available());
+        formFilter.addItemList ({ "All", "Over-ear", "In-ear", "Earbud" }, 1);
+        formFilter.setSelectedId (1, juce::dontSendNotification);
+        targetPick.addItem ("Auto", 1);
+        for (int i = 0; i < FlatQProcessor::numTargets(); ++i) targetPick.addItem (FlatQProcessor::targetName (i), i + 2);
+        targetPick.setSelectedId (1, juce::dontSendNotification);
+        searchBox.setTextToShowWhenEmpty ("Search " + juce::String (db.size()) + " measurements...", theme::dim);
+        searchBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff23272e));
+        searchBox.setColour (juce::TextEditor::textColourId, theme::text);
+        searchBox.setColour (juce::TextEditor::outlineColourId, theme::divider);
+        searchBox.setColour (juce::TextEditor::focusedOutlineColourId, theme::accent);
+        searchBox.setFont (juce::FontOptions (13.f));
+        searchBox.setTooltip ("Search the AutoEq measurements (name, brand, source). Click a result to create a profile from it: the correction is target - measurement.");
+        formFilter.setTooltip ("Only show measurements of this form factor");
+        targetPick.setTooltip ("Target curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear and earbuds.");
+        resultsInfo.setFont (juce::FontOptions (11.f)); resultsInfo.setColour (juce::Label::textColourId, theme::dim);
+        searchBox.onTextChange = [this] { updateSearch(); };
+        formFilter.onChange = [this] { updateSearch(); };
+        results.onPick = [this] (int idx)
+        {
+            juce::String err;
+            if (! proc.importMeasurement (idx, targetPick.getSelectedId() - 2, err))
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not import", err);
+            searchBox.clear();   // back to the profile list, now with the new profile selected
+            updateSearch();
+            profiles.refresh();
+        };
+        formFilter.setVisible (false); targetPick.setVisible (false); resultsInfo.setVisible (false); results.setVisible (false);
+    }
+
     disabledCard.setVisible (false);
     disabledCard.onEnable = [this] { if (auto* prm = proc.apvts.getParameter ("bypass")) prm->setValueNotifyingHost (0.f); };
     volumeIcon.setTooltip ("Mute / unmute the output");
@@ -789,6 +822,21 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     }
     startTimerHz (30);
     timerCallback();
+}
+
+void FlatQEditor::updateSearch()
+{
+    searching = searchBox.getText().trim().length() >= 2;
+    for (auto* c : std::initializer_list<juce::Component*> { &formFilter, &targetPick, &resultsInfo, &results }) c->setVisible (searching);
+    profiles.setVisible (! searching);
+    if (searching)
+    {
+        static const char* forms[] = { "", "over-ear", "in-ear", "earbud" };
+        auto hits = MeasurementDb::get().search (searchBox.getText(), forms[juce::jlimit (0, 3, formFilter.getSelectedId() - 1)], 300);
+        resultsInfo.setText (hits.empty() ? "No measurements found" : juce::String (hits.size()) + (hits.size() >= 300 ? "+ results (refine the search)" : " results"), juce::dontSendNotification);
+        results.setHits (std::move (hits));
+    }
+    resized();
 }
 
 FlatQEditor::~FlatQEditor()
@@ -939,7 +987,18 @@ void FlatQEditor::resized()
     logo.setBounds (side.removeFromTop (64).reduced (16, 12));
     loadButton.setBounds (side.removeFromBottom (40).reduced (12, 4));
     importButton.setBounds (side.removeFromBottom (48).reduced (12, 8).withTrimmedBottom (0));
+    if (MeasurementDb::get().available())
+    {
+        searchBox.setBounds (side.removeFromTop (40).reduced (12, 5));
+        if (searching)
+        {
+            auto fr = side.removeFromTop (34).reduced (12, 3);
+            formFilter.setBounds (fr.removeFromLeft (fr.getWidth() * 2 / 5 - 3)); fr.removeFromLeft (6); targetPick.setBounds (fr);
+            resultsInfo.setBounds (side.removeFromTop (20).reduced (14, 0));
+        }
+    }
     profiles.setBounds (side);
+    results.setBounds (side);
 
     auto head = r.removeFromTop (headerH);
     title.setBounds (head.removeFromTop (44).withTrimmedTop (12).reduced (20, 0));

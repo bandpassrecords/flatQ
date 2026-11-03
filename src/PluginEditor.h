@@ -1,5 +1,6 @@
 #pragma once
 #include "PluginProcessor.h"
+#include "MeasurementDb.h"
 
 namespace theme
 {
@@ -240,6 +241,38 @@ private:
     juce::ListBox box { {}, this };
 };
 
+// Search results from the embedded measurement pack: name on top, source / form / rig under it.
+class MeasurementList : public juce::Component, private juce::ListBoxModel
+{
+public:
+    MeasurementList() { box.setRowHeight (46); box.setOutlineThickness (0); addAndMakeVisible (box); }
+    void resized() override { box.setBounds (getLocalBounds()); }
+    void setHits (std::vector<int> h) { hits = std::move (h); box.updateContent(); box.deselectAllRows(); box.repaint(); box.scrollToEnsureRowIsOnscreen (0); }
+    std::function<void (int)> onPick;   // index into MeasurementDb
+private:
+    int getNumRows() override { return (int) hits.size(); }
+    void paintListBoxItem (int row, juce::Graphics& g, int w, int h, bool selected) override
+    {
+        if (row < 0 || row >= (int) hits.size()) return;
+        const auto& e = MeasurementDb::get().entry (hits[(size_t) row]);
+        if (selected) { g.setColour (theme::accent.withAlpha (0.14f)); g.fillRect (0, 0, w, h); }
+        g.setColour (theme::text); g.setFont (juce::FontOptions (12.5f));
+        g.drawText (e.name, 14, 5, w - 24, 18, juce::Justification::centredLeft, true);
+        g.setColour (theme::dim); g.setFont (juce::FontOptions (11.f));
+        g.drawText (e.source + "  -  " + e.form + (e.rig.isNotEmpty() ? "  -  " + e.rig : juce::String()), 14, 24, w - 24, 16, juce::Justification::centredLeft, true);
+        g.setColour (theme::divider); g.drawHorizontalLine (h - 1, 0.f, (float) w);
+    }
+    void listBoxItemClicked (int row, const juce::MouseEvent&) override { if (row >= 0 && row < (int) hits.size() && onPick) onPick (hits[(size_t) row]); }
+    juce::String getTooltipForRow (int row) override
+    {
+        if (row < 0 || row >= (int) hits.size()) return {};
+        const auto& e = MeasurementDb::get().entry (hits[(size_t) row]);
+        return e.name + " - measured by " + e.source + " (" + e.form + "). Click to create a profile from this measurement with the chosen target.";
+    }
+    std::vector<int> hits;
+    juce::ListBox box { {}, this };
+};
+
 class FlatQEditor : public juce::AudioProcessorEditor, private juce::Timer, private juce::ComponentListener
 {
 public:
@@ -266,6 +299,12 @@ private:
     FlatQProcessor& proc;
     ResponseGraph graph;
     ProfileList profiles { proc };
+    juce::TextEditor searchBox;
+    juce::ComboBox formFilter, targetPick;
+    juce::Label resultsInfo;
+    MeasurementList results;
+    bool searching = false;
+    void updateSearch();
     juce::TextButton loadButton { "+  Load profile file..." }, importButton { "+  Import AutoEq measurement..." };
     void importAutoEqFlow (const juce::File& measurement);
     juce::Label title, subtitle, logo { {}, "FlatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL;

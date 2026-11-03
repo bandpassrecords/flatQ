@@ -28,10 +28,23 @@ juce_add_binary_data(FlatQTargets HEADER_NAME "TargetData.h" NAMESPACE FlatQTarg
 set_target_properties(FlatQTargets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(FlatQProfiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# Measurement pack (data/measurements/, built by tools/build_measurement_db.py; git-ignored, personal use): optional
+set(FLATQ_MEAS "${CMAKE_SOURCE_DIR}/data/measurements")
+if(EXISTS "${FLATQ_MEAS}/measurements.tsv" AND EXISTS "${FLATQ_MEAS}/measurements.bin.gz")
+    juce_add_binary_data(FlatQMeasurements HEADER_NAME "MeasurementData.h" NAMESPACE FlatQMeasurementData
+        SOURCES "${FLATQ_MEAS}/measurements.tsv" "${FLATQ_MEAS}/measurements.bin.gz")
+    set_target_properties(FlatQMeasurements PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set(FLATQ_MEAS_TARGET FlatQMeasurements)
+    set(FLATQ_MEAS_DEF FLATQ_HAS_MEASUREMENTS=1)
+else()
+    message(STATUS "No measurement pack (run tools/build_measurement_db.py): building without the measurement search")
+    set(FLATQ_MEAS_DEF FLATQ_HAS_MEASUREMENTS=0)
+endif()
+
 target_sources(FlatQ PRIVATE src/PluginProcessor.cpp src/PluginEditor.cpp)
 target_include_directories(FlatQ PRIVATE src)
-target_compile_definitions(FlatQ PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(FlatQ PRIVATE FlatQProfiles FlatQTargets juce::juce_audio_utils juce::juce_dsp
+target_compile_definitions(FlatQ PUBLIC ${FLATQ_MEAS_DEF} JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+target_link_libraries(FlatQ PRIVATE FlatQProfiles FlatQTargets ${FLATQ_MEAS_TARGET} juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 # Tools (no JUCE) and tests

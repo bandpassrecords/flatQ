@@ -11,3 +11,6 @@ sources/
 *.lvls
 *.lvlsproj
 *.tmreq
+
+# Measurement pack built from AutoEq data (own licences, personal use): generate with tools/build_measurement_db.py
+data/measurements/

@@ -3,6 +3,7 @@
 #include <BinaryData.h>
 #include <TargetData.h>
 #include "AutoEqImport.h"
+#include "MeasurementDb.h"
 
 class FlatQProcessor::DesignThread : public juce::Thread
 {
@@ -274,11 +275,35 @@ bool FlatQProcessor::importAutoEq (const juce::File& measurement, const juce::St
 {
     if (! measurement.existsAsFile()) { error = "measurement file not found"; return false; }
     std::string err;
-    const auto name = measurement.getFileNameWithoutExtension() + " @ " + targetLabel;
+    const auto name = measurement.getFileNameWithoutExtension() + " - " + targetLabel;
     auto prof = flatq::buildAutoEqProfile (measurement.loadFileAsString().toStdString(), targetCsv.toStdString(), name.toStdString(), &err);
     if (! prof) { error = err; return false; }
     juce::File out;
     if (! saveToLibrary (*prof, name, true, out, error)) return false;
+    return loadProfile (out, error);
+}
+
+int FlatQProcessor::defaultTargetFor (int measurementIndex)
+{
+    const auto& e = MeasurementDb::get().entry (measurementIndex);
+    const juce::String want = e.form == "over-ear" ? "Harman over-ear 2018" : "Harman in-ear 2019";
+    for (int i = 0; i < numTargets(); ++i) if (targetName (i) == want) return i;
+    return 0;
+}
+
+bool FlatQProcessor::importMeasurement (int measurementIndex, int targetIndex, juce::String& error)
+{
+    auto& db = MeasurementDb::get();
+    flatq::CsvCurve m, t;
+    if (! db.available() || ! db.curve (measurementIndex, m)) { error = "measurement data not available"; return false; }
+    if (targetIndex < 0) targetIndex = defaultTargetFor (measurementIndex);
+    std::string err;
+    if (! flatq::parseAutoEqCsv (targetCsvText (targetIndex).toStdString(), t, &err)) { error = "target: " + juce::String (err); return false; }
+    const auto& e = db.entry (measurementIndex);
+    const auto name = e.name + " (" + e.source + ") - " + targetName (targetIndex);
+    auto prof = flatq::buildAutoEqProfile (m, t, name.toStdString());
+    juce::File out;
+    if (! saveToLibrary (prof, name, true, out, error)) return false;
     return loadProfile (out, error);
 }
 

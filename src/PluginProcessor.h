@@ -50,6 +50,9 @@ public:
     static juce::String targetName (int index);
     static juce::String targetCsvText (int index);
     static juce::File appDataDir();           // per-user settings folder (Application Support/FlatQ on macOS)
+    // Measurement from the embedded AutoEq pack -> profile in the library (target: index into targetName(), -1 = Harman by form)
+    bool importMeasurement (int measurementIndex, int targetIndex, juce::String& error);
+    static int defaultTargetFor (int measurementIndex);
     static juce::File importedProfilesDir();  // same folder as the user library
     // --- user profile library (Application Support/FlatQ/Profiles): list, import, duplicate, rename, delete
     static juce::File userProfilesDir();
