@@ -794,7 +794,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         auto panel = std::make_unique<ParamPanel> (proc.apvts, 420);
         panel->addToggle ("Respect max boost", "clamp", "Limit boosts to the global maximum and the profile's own ceiling");
         panel->addSlider ("Max boost", "maxboost", " dB", "Global limit for boosts. The profile's own ceiling (dashed line) also applies.");
-        panel->addSlider ("Max slope", "slope", " dB/oct", "Boosts may not rise faster than this (0 = off). Cuts narrow spikes while keeping broad corrections. AutoEq uses 18 dB/oct.");
+        panel->addSlider ("Max slope", "maxslope", {}, "Boosts may not rise faster than this: the further left, the stricter (the maximum is off). Cuts narrow spikes while keeping broad corrections. AutoEq uses 18 dB/oct.");
         panel->addSlider ("Bass limit", "basslimit", {}, "Correction fades out below this frequency (the lowest setting is off). Use it when the speaker cannot reproduce deep bass. Also draggable on the graph.");
         panel->addSlider ("Treble gain", "treblegain", " %", "Scales the correction above about 4-8 kHz. 100 % = untouched, 0 % = no treble correction.");
         panel->finish();
@@ -943,10 +943,10 @@ void FlatQEditor::refreshStatus()
     const int sm = choiceIndex ("smooth"), ts = choiceIndex ("treblesmooth");
     static const char* tsn[] = { "", "1/6", "1/3", "1/2", "1", "2" };
     smoothing.setValue (smoothName (sm) + (ts > 0 ? juce::String (" / ") + tsn[ts] + " hf" : juce::String()));
-    const float slope = a.getRawParameterValue ("slope")->load(), bass = a.getRawParameterValue ("basslimit")->load();
+    const float slope = a.getRawParameterValue ("maxslope")->load(), bass = a.getRawParameterValue ("basslimit")->load();
     juce::String l = a.getRawParameterValue ("clamp")->load() > 0.5f ? "+" + juce::String ((int) a.getRawParameterValue ("maxboost")->load()) + " dB" : "No limit";
-    if (slope > 0 || bass > 20.5f) l << " *";   // * = more limits active (see tooltip)
-    limits.setTooltip (juce::String ("Max boost ") + juce::String (a.getRawParameterValue ("maxboost")->load(), 1) + " dB, slope " + (slope > 0 ? juce::String ((int) slope) + " dB/oct" : "off") + ", bass limit " + (bass > 20.5f ? juce::String ((int) bass) + " Hz" : "off"));
+    if (slope < 35.5f || bass > 20.5f) l << " *";   // * = more limits active (see tooltip)
+    limits.setTooltip (juce::String ("Max boost ") + juce::String (a.getRawParameterValue ("maxboost")->load(), 1) + " dB, slope " + (slope < 35.5f ? juce::String ((int) slope) + " dB/oct" : "off") + ", bass limit " + (bass > 20.5f ? juce::String ((int) bass) + " Hz" : "off"));
     limits.setValue (l);
     preamp.setValue ((a.getRawParameterValue ("autopreamp")->load() > 0.5f ? "" : "Man. ") + juce::String (lastPreamp, 1) + " dB");
     { const int n = proc.manualEditedCount(); manual.setValue (n == 0 ? "Current" : "Edited " + juce::String (n)); }

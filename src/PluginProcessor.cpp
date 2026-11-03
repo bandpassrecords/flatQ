@@ -40,8 +40,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout FlatQProcessor::createLayout
            StringArray { "Off", "1/24 oct", "1/12 oct", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct" }, 0));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "treblesmooth", 1 }, "Treble smoothing",
            StringArray { "Same", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct", "2 oct" }, 0));
-    l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "slope", 1 }, "Max slope (dB/oct)",
-           NormalisableRange<float> (0.f, 36.f, 1.f), 0.f));
+    l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "maxslope", 1 }, "Max slope (dB/oct)",
+           NormalisableRange<float> (1.f, 36.f, 1.f), 36.f,   // starts at the maximum (= no limit); lowering it tightens the limit
+           AudioParameterFloatAttributes()
+               .withStringFromValueFunction ([] (float v, int) { return v >= 35.5f ? String ("Off") : String ((int) v) + " dB/oct"; })
+               .withValueFromStringFunction ([] (const String& t) { return t.trim().startsWithIgnoreCase ("off") ? 36.f : t.getFloatValue(); })));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "treblegain", 1 }, "Treble gain (%)",
            NormalisableRange<float> (0.f, 100.f, 1.f), 100.f));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "basslimit", 1 }, "Bass limit",
@@ -67,7 +70,7 @@ FlatQProcessor::FlatQProcessor()
 {
     for (auto& b : dryBuf) b.assign (kMaxLatency, 0.0f);
     for (auto& c : manualEq) for (auto& b : c) b = 0.f;
-    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "slope", "treblegain", "basslimit", "autopreamp" }) apvts.addParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "maxslope", "treblegain", "basslimit", "autopreamp" }) apvts.addParameterListener (id, this);
     designThread = std::make_unique<DesignThread> (*this);
     designThread->startThread();
 
@@ -92,7 +95,7 @@ juce::File FlatQProcessor::lastProfileFile()
 
 FlatQProcessor::~FlatQProcessor()
 {
-    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "slope", "treblegain", "basslimit", "autopreamp" }) apvts.removeParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "maxslope", "treblegain", "basslimit", "autopreamp" }) apvts.removeParameterListener (id, this);
     designThread->stopThread (5000);
 }
 
@@ -139,7 +142,7 @@ bool FlatQProcessor::setProfile (std::shared_ptr<const flatq::Profile> p, const 
             return best; };
         setParam ("smooth", p->d.hintSmoothOct > 0 ? nearest ({ 0, 1.0 / 24, 1.0 / 12, 1.0 / 6, 1.0 / 3, 0.5, 1.0 }, p->d.hintSmoothOct) : 0);
         setParam ("treblesmooth", p->d.hintTrebleSmoothOct > 0 ? nearest ({ 0, 1.0 / 6, 1.0 / 3, 0.5, 1.0, 2.0 }, p->d.hintTrebleSmoothOct) : 0);
-        setParam ("slope", p->d.hintSlopeDbOct >= 0 ? p->d.hintSlopeDbOct : 0.0);
+        setParam ("maxslope", p->d.hintSlopeDbOct >= 0 ? p->d.hintSlopeDbOct : 36.0);   // 36 = off
     }
     if (applyHints) for (auto& c : manualEq) for (auto& b : c) b = 0.f;   // a new profile starts from its own equalization
     {
@@ -362,7 +365,7 @@ void FlatQProcessor::redesign()
         static const double tw[] = { 0.0, 1.0 / 6, 1.0 / 3, 0.5, 1.0, 2.0 };
         opt.trebleSmoothOct = tw[juce::jlimit (0, 5, (int) apvts.getRawParameterValue ("treblesmooth")->load())];
         { const double bl = apvts.getRawParameterValue ("basslimit")->load(); opt.bassLimitHz = bl > 20.5 ? bl : 0.0; }   // bottom of the range = off
-        opt.maxSlopeDbOct = apvts.getRawParameterValue ("slope")->load();
+        { const double sl = apvts.getRawParameterValue ("maxslope")->load(); opt.maxSlopeDbOct = sl < 35.5 ? sl : 0.0; }   // the top of the range = off
         opt.trebleGain   = apvts.getRawParameterValue ("treblegain")->load() / 100.0;
     }
     opt.autoPreamp      = apvts.getRawParameterValue ("autopreamp")->load() > 0.5f;
