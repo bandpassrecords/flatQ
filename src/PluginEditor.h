@@ -345,6 +345,23 @@ private:
     bool clipped = false;
 };
 
+// The round "+" at the bottom of the sidebar: opens the Add a profile screen.
+class PlusButton : public juce::Button
+{
+public:
+    PlusButton() : juce::Button ("Add profile") { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+    void paintButton (juce::Graphics& g, bool over, bool down) override
+    {
+        auto r = getLocalBounds().toFloat().reduced (1.f);
+        g.setColour (over ? theme::accent : juce::Colour (0xff262626)); g.fillEllipse (r);
+        g.setColour (over ? theme::accent : theme::divider.brighter (0.25f)); g.drawEllipse (r, 1.2f);
+        const auto c = r.getCentre(); const float arm = r.getWidth() * (down ? 0.19f : 0.22f);
+        g.setColour (over ? theme::bg : theme::text);
+        g.drawLine (c.x - arm, c.y, c.x + arm, c.y, 2.2f);
+        g.drawLine (c.x, c.y - arm, c.x, c.y + arm, 2.2f);
+    }
+};
+
 // Clickable "LABEL / value ^" cell in the bottom status row.
 class StatusItem : public juce::Component, public juce::SettableTooltipClient
 {
@@ -374,7 +391,7 @@ public:
     {
         if (! entries.empty()) return;
         g.setColour (theme::dim); g.setFont (juce::FontOptions (12.5f));
-        g.drawFittedText ("No profiles yet.\nSearch for your headphone above, or load a profile file.", getLocalBounds().reduced (18, 24), juce::Justification::topLeft, 4);
+        g.drawFittedText ("No profiles yet.\nUse the + below to add one.", getLocalBounds().reduced (18, 24), juce::Justification::topLeft, 4, 1.0f);
     }
     void syncSelection();    // highlight the loaded profile (no disk access)
 private:
@@ -491,7 +508,8 @@ private:
     ResponseGraph graph;
     ProfileList profiles { proc };
     AddProfileScreen addScreen { proc };            // the "Add a profile" screen (search, brands, file / CSV import)
-    juce::TextButton addButton { "+  Add profile" }, saveAsBtn { "Save as profile..." };   // saveAsBtn: shown once the equalization was edited by hand
+    PlusButton addButton;
+    juce::TextButton saveAsBtn { "Save as profile..." };   // saveAsBtn: shown once the equalization was edited by hand
     std::unique_ptr<juce::FileChooser> exportChooser;
     void saveAsFlow();
     void openAddScreen() { addScreen.open(); }

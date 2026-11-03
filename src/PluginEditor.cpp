@@ -1007,6 +1007,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     subtitle.setFont (juce::FontOptions (13.f)); subtitle.setColour (juce::Label::textColourId, theme::dim);
     for (auto* l : { &inL, &outL, &trimL }) { l->setJustificationType (juce::Justification::centred); l->setColour (juce::Label::textColourId, theme::dim); l->setFont (juce::FontOptions (12.f)); }
     trim.setTooltip ("Output volume. The red zone is above this profile\'s safe limit. Double-click to reset.");
+    addButton.setTooltip ("Add profile");
     addButton.onClick = [this] { openAddScreen(); };
     saveAsBtn.onClick = [this] { saveAsFlow(); };
     addChildComponent (saveAsBtn);
@@ -1316,7 +1317,7 @@ void FlatQEditor::resized()
     head64.removeFromLeft (10);
     logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it 
     brand.setBounds (head64.removeFromTop (16).withTrimmedLeft (3));
-    addButton.setBounds (side.removeFromBottom (52).reduced (12, 8));
+    addButton.setBounds (side.removeFromBottom (72).withSizeKeepingCentre (46, 46));   // a round +, centred at the bottom
     profiles.setBounds (side);
     addScreen.setBounds (getLocalBounds());
 
