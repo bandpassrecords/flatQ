@@ -18,6 +18,26 @@ namespace theme
     const juce::Colour chanR    { 0xfff4a259 };
 }
 
+// The FlatQ mark: an EQ curve whose ripples die out into the flat line (same drawing as assets/logo.svg).
+class LogoMark : public juce::Component
+{
+public:
+    void paint (juce::Graphics& g) override
+    {
+        auto r = getLocalBounds().toFloat();
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff20242b), 0.f, r.getY(), juce::Colour (0xff0f1115), 0.f, r.getBottom(), false));
+        g.fillRoundedRectangle (r, r.getWidth() * 0.22f);
+        const float k = r.getWidth() / 512.f;
+        auto P = [&] (float x, float y) { return juce::Point<float> (r.getX() + x * k, r.getY() + y * k); };
+        juce::Path w; w.startNewSubPath (P (64, 256));
+        auto c = [&] (float x1, float y1, float x2, float y2, float x3, float y3) { w.cubicTo (P (x1, y1), P (x2, y2), P (x3, y3)); };
+        c (90, 256, 95, 150, 125, 150); c (155, 150, 160, 350, 195, 350); c (230, 350, 225, 205, 255, 205);
+        c (285, 205, 285, 300, 315, 300); c (345, 300, 340, 232, 372, 240); c (404, 248, 410, 256, 448, 256);
+        g.setGradientFill (juce::ColourGradient (theme::accent, P (64, 0).x, 0.f, theme::good, P (448, 0).x, 0.f, false));
+        g.strokePath (w, juce::PathStrokeType (30.f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+};
+
 class FlatQLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
@@ -310,7 +330,8 @@ private:
     void updateSearch();
     juce::TextButton loadButton { "+  Load profile file..." }, importButton { "+  Import AutoEq measurement..." };
     void importAutoEqFlow (const juce::File& measurement);
-    juce::Label title, subtitle, logo { {}, "FlatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL;
+    juce::Label title, subtitle, logo { {}, "FlatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL, brand { {}, "BandPass Records" };
+    LogoMark logoMark;
     LevelMeter inMeter { proc.inPeak }, outMeter { proc.outPeak };
     OutputFader trim;
     SpeakerButton volumeIcon;

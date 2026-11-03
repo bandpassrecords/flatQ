@@ -10,7 +10,10 @@ FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(FlatQ
     PRODUCT_NAME "FlatQ"
-    COMPANY_NAME "FlatQ"
+    COMPANY_NAME "BandPass Records"           # the vendor shown by hosts
+    BUNDLE_ID "com.bandpassrecords.flatq"
+    COMPANY_WEBSITE "https://flatq.bandpassrecords.com"
+    ICON_BIG "${CMAKE_SOURCE_DIR}/assets/icon.png"
     PLUGIN_MANUFACTURER_CODE FlTq
     PLUGIN_CODE FlQp
     FORMATS VST3 AU Standalone

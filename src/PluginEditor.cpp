@@ -649,11 +649,13 @@ namespace
 FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
     setLookAndFeel (&laf);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &brandPick, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logo, &inL, &outL, &trimL,
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &brandPick, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logoMark, &logo, &brand, &inL, &outL, &trimL,
                                                               &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &disabledCard, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
     logo.setFont (juce::FontOptions (26.f, juce::Font::bold));
+    brand.setFont (juce::FontOptions (11.f)); brand.setColour (juce::Label::textColourId, theme::dim);
+    brand.setTooltip ("FlatQ by BandPass Records");
     title.setFont (juce::FontOptions (24.f)); title.setMinimumHorizontalScale (0.7f);
     subtitle.setFont (juce::FontOptions (13.f)); subtitle.setColour (juce::Label::textColourId, theme::dim);
     for (auto* l : { &inL, &outL, &trimL }) { l->setJustificationType (juce::Justification::centred); l->setColour (juce::Label::textColourId, theme::dim); l->setFont (juce::FontOptions (12.f)); }
@@ -1007,7 +1009,11 @@ void FlatQEditor::resized()
     auto side = r.removeFromLeft (sidebarW);
     auto strip = r.removeFromRight (stripW);
 
-    logo.setBounds (side.removeFromTop (64).reduced (16, 12));
+    auto head64 = side.removeFromTop (64).reduced (16, 0);
+    logoMark.setBounds (head64.removeFromLeft (36).withSizeKeepingCentre (36, 36));
+    head64.removeFromLeft (10);
+    logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it (like "from Sonarworks")
+    brand.setBounds (head64.removeFromTop (16).withTrimmedLeft (3));
     loadButton.setBounds (side.removeFromBottom (40).reduced (12, 4));
     importButton.setBounds (side.removeFromBottom (48).reduced (12, 8).withTrimmedBottom (0));
     if (MeasurementDb::get().available())
