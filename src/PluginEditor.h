@@ -376,6 +376,39 @@ private:
     juce::ListBox box { {}, this };
 };
 
+// The "Add a profile" screen: one place for everything that brings a new profile in. Search and browse by brand the
+// embedded measurement database (AutoEq + the HD 490 profiles), or load a profile file / import a measurement CSV.
+class AddProfileScreen : public juce::Component
+{
+public:
+    explicit AddProfileScreen (FlatQProcessor& p);
+    std::function<void()> onClose;    // back to the main window
+    std::function<void()> onAdded;    // a profile was added to the library and loaded
+    void open();
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;
+private:
+    void updateSearch();
+    void pickMeasurement (int index);
+    void chooseProfileFile();
+    void chooseCsv();
+    void importCsvFlow (const juce::File& measurement);
+    void report (bool ok, const juce::String& title, const juce::String& err);
+
+    FlatQProcessor& proc;
+    juce::TextButton back { "<  Back" }, loadFile { "Choose file..." }, importCsv { "Choose CSV..." };
+    juce::Label title { {}, "Add a profile" }, otherTitle { {}, "Other ways to add" },
+                brandL { {}, "Brand" }, formL { {}, "Form" }, targetL { {}, "Target" }, resultsInfo;
+    juce::TextEditor searchBox;
+    juce::ComboBox brandPick, formFilter, targetPick;
+    MeasurementList results;
+    juce::String selectedBrand;
+    bool searching = false;
+    juce::Rectangle<int> cardA, cardB, resultsRect;
+    std::unique_ptr<juce::FileChooser> chooser;
+};
+
 class FlatQEditor : public juce::AudioProcessorEditor, private juce::Timer, private juce::ComponentListener
 {
 public:
@@ -408,15 +441,9 @@ private:
     FlatQProcessor& proc;
     ResponseGraph graph;
     ProfileList profiles { proc };
-    juce::TextEditor searchBox;
-    juce::ComboBox brandPick, formFilter, targetPick;
-    juce::String selectedBrand;
-    juce::Label resultsInfo;
-    MeasurementList results;
-    bool searching = false;
-    void updateSearch();
-    juce::TextButton loadButton { "+  Load profile file..." }, importButton { "+  Import AutoEq measurement..." };
-    void importAutoEqFlow (const juce::File& measurement);
+    AddProfileScreen addScreen { proc };            // the "Add a profile" screen (search, brands, file / CSV import)
+    juce::TextButton addButton { "+  Add profile" };
+    void openAddScreen() { addScreen.open(); }
     juce::Label title, subtitle, logo { {}, "FlatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL, brand { {}, "BandPass Records" };
     LogoMark logoMark;
     LevelMeter inMeter { proc.inPeak }, outMeter { proc.outPeak };
@@ -447,7 +474,6 @@ private:
     int sidebarW() const { return sidebarVisible ? 230 : 0; }   // the left bar can be hidden
     SidebarToggle sidebarBtn;
     void applySidebarVisibility();
-    std::unique_ptr<juce::FileChooser> chooser;
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<BA> bypassA, skipA, monoA, muteA, swapA;

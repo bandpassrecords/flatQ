@@ -24,6 +24,8 @@ FlatQLookAndFeel::FlatQLookAndFeel()
     setColour (juce::BubbleComponent::backgroundColourId, panel);
     setColour (juce::BubbleComponent::outlineColourId, divider);
     setColour (juce::ListBox::backgroundColourId, sidebar);
+    setColour (juce::ScrollBar::thumbColourId, juce::Colour (0xff5a5a5a));   // the default is blue
+    setColour (juce::ScrollBar::trackColourId, juce::Colours::transparentBlack);
     setColour (juce::TextEditor::highlightColourId, accent.withAlpha (0.35f));
     setColour (juce::CaretComponent::caretColourId, accent);
     setColour (juce::Slider::rotarySliderOutlineColourId, track);
@@ -735,11 +737,247 @@ namespace
     }
 }
 
+// ------------------------------------------------------------------------------------------------ add-profile screen
+AddProfileScreen::AddProfileScreen (FlatQProcessor& p) : proc (p)
+{
+    setOpaque (true);
+    setWantsKeyboardFocus (true);
+    auto& db = MeasurementDb::get();
+
+    title.setFont (juce::FontOptions (22.f, juce::Font::bold));
+    otherTitle.setFont (juce::FontOptions (16.f, juce::Font::bold));
+    for (auto* l : { &brandL, &formL, &targetL }) { l->setFont (juce::FontOptions (11.f)); l->setColour (juce::Label::textColourId, theme::dim); }
+    resultsInfo.setFont (juce::FontOptions (12.f)); resultsInfo.setColour (juce::Label::textColourId, theme::dim);
+
+    {   // brands grouped by their first letter, in sub-menus (hundreds of brands in one flat list would be unusable)
+        auto& root = *brandPick.getRootMenu();
+        root.addItem (1, "All brands");
+        std::map<juce::String, juce::PopupMenu> groups;
+        int id = 2;
+        for (auto& b : db.brands())
+        {
+            const auto c = b.name.substring (0, 1).toUpperCase();
+            groups[juce::CharacterFunctions::isLetter (c[0]) ? c : juce::String ("0-9")].addItem (id++, b.name + "  (" + juce::String (b.count) + ")");
+        }
+        for (auto& g : groups) root.addSubMenu (g.first, g.second);
+        brandPick.setSelectedId (1, juce::dontSendNotification);
+        brandPick.onChange = [this]
+        {
+            const int sel = brandPick.getSelectedId();
+            selectedBrand = sel >= 2 ? MeasurementDb::get().brands()[(size_t) sel - 2].name : juce::String();
+            updateSearch();
+        };
+    }
+    formFilter.addItemList ({ "All", "Over-ear", "In-ear", "Earbud" }, 1);
+    formFilter.setSelectedId (1, juce::dontSendNotification);
+    formFilter.onChange = [this] { updateSearch(); };
+    targetPick.addItem ("Auto", 1);
+    for (int i = 0; i < FlatQProcessor::numTargets(); ++i) targetPick.addItem (FlatQProcessor::targetName (i), i + 2);
+    targetPick.setSelectedId (1, juce::dontSendNotification);
+
+    searchBox.setTextToShowWhenEmpty ("Search by name, brand or source", theme::dim);
+    searchBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff262626));
+    searchBox.setColour (juce::TextEditor::textColourId, theme::text);
+    searchBox.setColour (juce::TextEditor::outlineColourId, theme::divider);
+    searchBox.setColour (juce::TextEditor::highlightColourId, theme::accent.withAlpha (0.35f));
+    searchBox.setColour (juce::TextEditor::highlightedTextColourId, theme::text);
+    searchBox.setColour (juce::TextEditor::focusedOutlineColourId, theme::accent);
+    searchBox.setFont (juce::FontOptions (15.f));
+    searchBox.setJustification (juce::Justification::centredLeft);
+    searchBox.setIndents (10, 0);
+    searchBox.setBorder ({ 0, 0, 0, 0 });
+    searchBox.onTextChange = [this] { updateSearch(); };
+    searchBox.onEscapeKey = [this] { if (onClose) onClose(); };
+
+    results.onPick = [this] (int idx) { pickMeasurement (idx); };
+
+    back.onClick = [this] { if (onClose) onClose(); };
+    loadFile.onClick = [this] { chooseProfileFile(); };
+    importCsv.onClick = [this] { chooseCsv(); };
+    for (auto* b : { &loadFile, &importCsv }) { b->setColour (juce::TextButton::buttonColourId, theme::accent); b->setColour (juce::TextButton::textColourOffId, theme::bg); }
+
+    back.setTooltip ("Back to the main window (Esc)");
+    searchBox.setTooltip ("Search the measurements and profiles by name, brand or source. Click a result to create a profile from it.");
+    brandPick.setTooltip ("Browse by manufacturer: pick a brand to list all its headphones.");
+    formFilter.setTooltip ("Only show measurements of this form factor");
+    targetPick.setTooltip ("Target curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear and earbuds. Does not apply to finished AutoEq results or to ready-made profiles.");
+    loadFile.setTooltip ("Load a .flatq, .lvls, .lvlsproj or .tmreq profile from disk");
+    importCsv.setTooltip ("Import your own measurement (CSV with frequency and raw columns), then choose a target. The correction is target - measurement.");
+
+    for (auto* c : std::initializer_list<juce::Component*> { &back, &title, &otherTitle, &brandL, &formL, &targetL, &resultsInfo, &searchBox,
+                                                              &brandPick, &formFilter, &targetPick, &results, &loadFile, &importCsv })
+        addAndMakeVisible (c);
+    const bool has = db.available();   // without the pack there is nothing to search: only the two import cards remain
+    for (auto* c : std::initializer_list<juce::Component*> { &brandL, &formL, &targetL, &resultsInfo, &searchBox, &brandPick, &formFilter, &targetPick, &results })
+        c->setVisible (has);
+    results.setVisible (false);
+}
+
+void AddProfileScreen::open()
+{
+    searchBox.clear();
+    brandPick.setSelectedId (1, juce::dontSendNotification); selectedBrand = {};
+    updateSearch();
+    setVisible (true);
+    toFront (true);
+    if (MeasurementDb::get().available()) searchBox.grabKeyboardFocus(); else grabKeyboardFocus();
+}
+
+bool AddProfileScreen::keyPressed (const juce::KeyPress& k)
+{
+    if (k == juce::KeyPress::escapeKey) { if (onClose) onClose(); return true; }
+    return false;
+}
+
+void AddProfileScreen::report (bool ok, const juce::String& what, const juce::String& err)
+{
+    if (! ok) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, what, err);
+}
+
+void AddProfileScreen::updateSearch()
+{
+    searching = MeasurementDb::get().available() && (searchBox.getText().trim().length() >= 2 || selectedBrand.isNotEmpty());
+    results.setVisible (searching);
+    if (searching)
+    {
+        static const char* forms[] = { "", "over-ear", "in-ear", "earbud" };
+        auto hits = MeasurementDb::get().search (searchBox.getText(), forms[juce::jlimit (0, 3, formFilter.getSelectedId() - 1)], selectedBrand, 500);
+        resultsInfo.setText (hits.empty() ? "No measurements found" : juce::String (hits.size()) + (hits.size() >= 500 ? "+ results (refine the search)" : " results"), juce::dontSendNotification);
+        results.setHits (std::move (hits));
+    }
+    else resultsInfo.setText ({}, juce::dontSendNotification);
+    repaint();
+}
+
+void AddProfileScreen::pickMeasurement (int idx)
+{
+    juce::String err;
+    const bool ok = proc.importMeasurement (idx, targetPick.getSelectedId() - 2, err);
+    report (ok, "Could not import", err);
+    if (ok && onAdded) onAdded();
+}
+
+void AddProfileScreen::chooseProfileFile()
+{
+    chooser = std::make_unique<juce::FileChooser> ("Select a profile", juce::File(), "*.flatq;*.lvls;*.lvlsproj;*.tmreq");
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this] (const juce::FileChooser& fc)
+        {
+            auto f = fc.getResult();
+            if (! f.existsAsFile()) return;
+            juce::String err;
+            const bool ok = proc.importProfileFile (f, err);   // converted and saved in the library, then loaded
+            report (ok, "Could not load profile", err);
+            if (ok && onAdded) onAdded();
+        });
+}
+
+void AddProfileScreen::chooseCsv()
+{
+    auto start = juce::File ("~/workspace/github/AutoEq-4.1.2/measurements");
+    chooser = std::make_unique<juce::FileChooser> ("Select a measurement (.csv)", start.isDirectory() ? start : juce::File(), "*.csv");
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this] (const juce::FileChooser& fc) { auto f = fc.getResult(); if (f.existsAsFile()) importCsvFlow (f); });
+}
+
+void AddProfileScreen::importCsvFlow (const juce::File& measurement)
+{
+    // target menu: bundled AutoEq targets (Harman first) + any CSV file
+    juce::PopupMenu m;
+    m.addSectionHeader ("Target for " + measurement.getFileNameWithoutExtension());
+    juce::Array<int> order;
+    for (int i = 0; i < FlatQProcessor::numTargets(); ++i) order.add (i);
+    std::stable_sort (order.begin(), order.end(), [] (int a, int b) {
+        const bool ha = FlatQProcessor::targetName (a).startsWithIgnoreCase ("Harman"), hb = FlatQProcessor::targetName (b).startsWithIgnoreCase ("Harman");
+        return ha != hb ? ha : false; });
+    for (int i : order) m.addItem (i + 2, FlatQProcessor::targetName (i));
+    m.addSeparator();
+    m.addItem (1, "Choose a target CSV file...");
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&importCsv).withParentComponent (this).withMinimumWidth (260),
+        [this, measurement] (int r)
+        {
+            if (r <= 0) return;
+            auto run = [this, measurement] (const juce::String& csv, const juce::String& label)
+            {
+                juce::String err;
+                const bool ok = proc.importAutoEq (measurement, csv, label, err);
+                report (ok, "Could not import", err);
+                if (ok && onAdded) onAdded();
+            };
+            if (r >= 2) { run (FlatQProcessor::targetCsvText (r - 2), FlatQProcessor::targetName (r - 2)); return; }
+            chooser = std::make_unique<juce::FileChooser> ("Select a target (.csv)", measurement.getParentDirectory(), "*.csv");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                [run] (const juce::FileChooser& fc) { auto f = fc.getResult(); if (f.existsAsFile()) run (f.loadFileAsString(), f.getFileNameWithoutExtension()); });
+        });
+}
+
+void AddProfileScreen::resized()
+{
+    auto r = getLocalBounds();
+    auto top = r.removeFromTop (64);
+    back.setBounds (top.removeFromLeft (112).reduced (16, 16));
+    title.setBounds (top.reduced (8, 0));
+
+    auto body = r.reduced (32, 24);
+    const int rightW = juce::jlimit (280, 360, body.getWidth() / 3);
+    auto right = body.removeFromRight (rightW);
+    body.removeFromRight (32);
+    auto left = body;
+
+    searchBox.setBounds (left.removeFromTop (42)); left.removeFromTop (12);
+    auto fr = left.removeFromTop (52);
+    const int cw = (fr.getWidth() - 20) / 3;
+    for (auto pr : { std::pair<juce::Label*, juce::Component*> { &brandL, &brandPick }, { &formL, &formFilter }, { &targetL, &targetPick } })
+    {
+        auto col = fr.removeFromLeft (cw); fr.removeFromLeft (10);
+        pr.first->setBounds (col.removeFromTop (18).withTrimmedLeft (2));
+        pr.second->setBounds (col);
+    }
+    left.removeFromTop (8);
+    resultsInfo.setBounds (left.removeFromTop (22).withTrimmedLeft (2));
+    resultsRect = left;
+    results.setBounds (left);
+
+    otherTitle.setBounds (right.removeFromTop (28)); right.removeFromTop (8);
+    cardA = right.removeFromTop (150); right.removeFromTop (16);
+    cardB = right.removeFromTop (150);
+    loadFile.setBounds (cardA.reduced (16).removeFromBottom (34));
+    importCsv.setBounds (cardB.reduced (16).removeFromBottom (34));
+}
+
+void AddProfileScreen::paint (juce::Graphics& g)
+{
+    using namespace theme;
+    g.fillAll (bg);
+    g.setColour (panel); g.fillRect (0, 0, getWidth(), 64);
+    g.setColour (divider); g.drawHorizontalLine (63, 0.f, (float) getWidth());
+
+    auto card = [&] (juce::Rectangle<int> r, const juce::String& head, const juce::String& desc)
+    {
+        g.setColour (panel); g.fillRoundedRectangle (r.toFloat(), 10.f);
+        g.setColour (divider); g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 10.f, 1.f);
+        auto in = r.reduced (16);
+        g.setColour (text); g.setFont (juce::FontOptions (14.f, juce::Font::bold));
+        g.drawText (head, in.removeFromTop (22), juce::Justification::centredLeft);
+        g.setColour (dim); g.setFont (juce::FontOptions (12.f));
+        g.drawFittedText (desc, in.removeFromTop (60), juce::Justification::topLeft, 4);
+    };
+    card (cardA, "Profile file", "Load a .flatq profile, a Sonarworks (.lvls, .lvlsproj) or an RME TotalMix (.tmreq) profile from disk. It is saved in your library.");
+    card (cardB, "Measurement CSV", "Import your own measurement (a CSV with frequency and raw columns, like the AutoEq ones). You choose the target next.");
+
+    g.setColour (dim); g.setFont (juce::FontOptions (13.f));
+    if (! MeasurementDb::get().available())
+        g.drawFittedText ("The measurement database is not part of this build.\nUse a profile file or your own CSV.", getLocalBounds().withTrimmedRight (400).reduced (32, 80), juce::Justification::topLeft, 4);
+    else if (! searching)
+        g.drawFittedText (juce::String (MeasurementDb::get().size()) + " measurements and profiles from AutoEq and others.\nType a name above, or pick a brand, to list them.",
+                          resultsRect.reduced (2, 6), juce::Justification::topLeft, 4);
+}
+
 // ------------------------------------------------------------------------------------------------ editor
 FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
     setLookAndFeel (&laf);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &brandPick, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logoMark, &logo, &brand, &inL, &outL, &trimL,
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &addButton, &title, &subtitle, &logoMark, &logo, &brand, &inL, &outL, &trimL,
                                                               &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &sidebarBtn, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
@@ -750,65 +988,12 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     subtitle.setFont (juce::FontOptions (13.f)); subtitle.setColour (juce::Label::textColourId, theme::dim);
     for (auto* l : { &inL, &outL, &trimL }) { l->setJustificationType (juce::Justification::centred); l->setColour (juce::Label::textColourId, theme::dim); l->setFont (juce::FontOptions (12.f)); }
     trim.setTooltip ("Output volume (total gain = preamp + trim). The red zone is above the safe limit for this profile: the fader can't go there, so the EQ can't clip. Double-click to return to the default.");
-    // measurement search (only when the pack was built into the plugin)
-    {
-        auto& db = MeasurementDb::get();
-        searchBox.setVisible (db.available());
-        brandPick.setVisible (db.available());
-        {   // brands grouped by their first letter, in sub-menus (500 brands in one flat list would be unusable)
-            auto& root = *brandPick.getRootMenu();
-            root.addItem (1, "Browse by brand...");
-            std::map<juce::String, juce::PopupMenu> groups;
-            int id = 2;
-            for (auto& b : db.brands())
-            {
-                const auto c = b.name.substring (0, 1).toUpperCase();
-                groups[juce::CharacterFunctions::isLetter (c[0]) ? c : juce::String ("0-9")].addItem (id++, b.name + "  (" + juce::String (b.count) + ")");
-            }
-            for (auto& g : groups) root.addSubMenu (g.first, g.second);
-            brandPick.setSelectedId (1, juce::dontSendNotification);
-            brandPick.setTooltip ("Browse the measurements by manufacturer: pick a brand to list all its headphones.");
-            brandPick.onChange = [this]
-            {
-                const int sel = brandPick.getSelectedId();
-                selectedBrand = sel >= 2 ? MeasurementDb::get().brands()[(size_t) sel - 2].name : juce::String();
-                updateSearch();
-            };
-        }
-        formFilter.addItemList ({ "All", "Over-ear", "In-ear", "Earbud" }, 1);
-        formFilter.setSelectedId (1, juce::dontSendNotification);
-        targetPick.addItem ("Auto", 1);
-        for (int i = 0; i < FlatQProcessor::numTargets(); ++i) targetPick.addItem (FlatQProcessor::targetName (i), i + 2);
-        targetPick.setSelectedId (1, juce::dontSendNotification);
-        searchBox.setTextToShowWhenEmpty ("Search", theme::dim);
-        searchBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff262626));
-        searchBox.setColour (juce::TextEditor::textColourId, theme::text);
-        searchBox.setColour (juce::TextEditor::outlineColourId, theme::divider);
-        searchBox.setColour (juce::TextEditor::highlightColourId, theme::accent.withAlpha (0.35f));
-        searchBox.setColour (juce::TextEditor::highlightedTextColourId, theme::text);
-        searchBox.setColour (juce::TextEditor::focusedOutlineColourId, theme::accent);
-        searchBox.setFont (juce::FontOptions (13.f));
-        searchBox.setJustification (juce::Justification::centredLeft);   // single-line field: text (and the placeholder) centred vertically
-        searchBox.setIndents (8, 0);
-        searchBox.setBorder ({ 0, 0, 0, 0 });
-        searchBox.setTooltip ("Search the AutoEq measurements (name, brand, source). Click a result to create a profile from it: the correction is target - measurement.");
-        formFilter.setTooltip ("Only show measurements of this form factor");
-        targetPick.setTooltip ("Target curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear and earbuds.");
-        resultsInfo.setFont (juce::FontOptions (11.f)); resultsInfo.setColour (juce::Label::textColourId, theme::dim);
-        searchBox.onTextChange = [this] { updateSearch(); };
-        formFilter.onChange = [this] { updateSearch(); };
-        results.onPick = [this] (int idx)
-        {
-            juce::String err;
-            if (! proc.importMeasurement (idx, targetPick.getSelectedId() - 2, err))
-                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not import", err);
-            searchBox.clear();   // back to the profile list, now with the new profile selected
-            brandPick.setSelectedId (1, juce::dontSendNotification); selectedBrand = {};
-            updateSearch();
-            profiles.refresh();
-        };
-        formFilter.setVisible (false); targetPick.setVisible (false); resultsInfo.setVisible (false); results.setVisible (false);
-    }
+    addButton.setTooltip ("Add a profile: search the measurement database, browse by brand, load a profile file or import a measurement CSV");
+    addButton.onClick = [this] { openAddScreen(); };
+    addScreen.onClose = [this] { addScreen.setVisible (false); };
+    addScreen.onAdded = [this] { profiles.refresh(); addScreen.setVisible (false); };
+    addChildComponent (addScreen);   // last child = on top of everything
+
 
     dryWet.setRotaryParameters (juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
     dryWet.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 22);
@@ -854,30 +1039,6 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     mono.setTooltip ("Mono check: sums the output to mono, (L + R) / 2. Two rings = stereo, one ring = mono.");
     monoA = std::make_unique<BA> (p.apvts, "mono", mono);
     skipA = std::make_unique<BA> (p.apvts, "bypassexport", skipExport);
-
-    loadButton.onClick = [this]
-    {
-        chooser = std::make_unique<juce::FileChooser> ("Select a profile", juce::File(), "*.flatq;*.lvls;*.lvlsproj;*.tmreq");
-        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-            [this] (const juce::FileChooser& fc)
-            {
-                auto f = fc.getResult();
-                if (! f.existsAsFile()) return;
-                juce::String err;
-                if (! proc.importProfileFile (f, err))   // converted and saved in the library, then loaded
-                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not load profile", err);
-                profiles.refresh();
-            });
-    };
-
-    importButton.setTooltip ("Pick an AutoEq measurement CSV (frequency,raw), then a target curve. The correction is target - measurement.");
-    importButton.onClick = [this]
-    {
-        auto start = juce::File ("~/workspace/github/AutoEq-4.1.2/measurements");
-        chooser = std::make_unique<juce::FileChooser> ("Select an AutoEq measurement (.csv)", start.isDirectory() ? start : juce::File(), "*.csv");
-        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-            [this] (const juce::FileChooser& fc) { auto f = fc.getResult(); if (f.existsAsFile()) importAutoEqFlow (f); });
-    };
 
     graph.onDragState = [this] (bool begin)
     {
@@ -949,7 +1110,6 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     outMeter.setTooltip ("Output level (peak, L / R), after the EQ and trim");
     title.setTooltip ("Current profile");
     subtitle.setTooltip ("Preamp = gain reduction that keeps the EQ from clipping. Max fit error = largest difference between the target and the filter's response.");
-    loadButton.setTooltip ("Load a .flatq, .lvls, .lvlsproj or .tmreq profile from disk");
     bypass.setTooltip ("Calibration on/off. Disabled = the EQ is bypassed (the signal stays delayed by the reported latency so the host stays in sync).");
     inL.setTooltip ("Input level"); outL.setTooltip ("Output level");
     trimL.setTooltip ("Output level in dB (preamp + trim)");
@@ -973,36 +1133,20 @@ void FlatQEditor::showSettings()
 void FlatQEditor::showMenu()
 {
     juce::PopupMenu m;
+    m.addItem (3, "Add profile...");
+    m.addSeparator();
     m.addItem (1, "Settings...");
     m.addItem (2, "About FlatQ");
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&menuDots).withParentComponent (this),
-                     [this] (int r) { markClosed (menuDots); if (r == 1) showSettings(); else if (r == 2) showAbout(); });
+                     [this] (int r) { markClosed (menuDots); if (r == 1) showSettings(); else if (r == 2) showAbout(); else if (r == 3) openAddScreen(); });
 }
 
 void FlatQEditor::applySidebarVisibility()
 {
-    for (auto* c : std::initializer_list<juce::Component*> { &logoMark, &logo, &brand, &aboutArea, &loadButton, &importButton })
+    for (auto* c : std::initializer_list<juce::Component*> { &logoMark, &logo, &brand, &aboutArea, &addButton, &profiles })
         c->setVisible (sidebarVisible);
-    searchBox.setVisible (sidebarVisible && MeasurementDb::get().available());
-    brandPick.setVisible (sidebarVisible && MeasurementDb::get().available());
-    updateSearch();   // the search results / profile list follow the bar
     sidebarBtn.repaint();
     repaint();
-}
-
-void FlatQEditor::updateSearch()
-{
-    searching = searchBox.getText().trim().length() >= 2 || selectedBrand.isNotEmpty();
-    for (auto* c : std::initializer_list<juce::Component*> { &formFilter, &targetPick, &resultsInfo, &results }) c->setVisible (searching && sidebarVisible);
-    profiles.setVisible (! searching && sidebarVisible);
-    if (searching)
-    {
-        static const char* forms[] = { "", "over-ear", "in-ear", "earbud" };
-        auto hits = MeasurementDb::get().search (searchBox.getText(), forms[juce::jlimit (0, 3, formFilter.getSelectedId() - 1)], selectedBrand, 500);
-        resultsInfo.setText (hits.empty() ? "No measurements found" : juce::String (hits.size()) + (hits.size() >= 500 ? "+ results (refine the search)" : " results"), juce::dontSendNotification);
-        results.setHits (std::move (hits));
-    }
-    resized();
 }
 
 FlatQEditor::~FlatQEditor()
@@ -1024,37 +1168,6 @@ void FlatQEditor::showPanel (std::unique_ptr<juce::Component> c, juce::Component
     auto& box = juce::CallOutBox::launchAsynchronously (std::move (c), from.getScreenBounds(), nullptr);
     callout = &box; calloutItem = &from;
     box.addComponentListener (this);
-}
-
-void FlatQEditor::importAutoEqFlow (const juce::File& measurement)
-{
-    // target menu: bundled AutoEq targets (Harman first) + any CSV file
-    juce::PopupMenu m;
-    m.addSectionHeader ("Target for " + measurement.getFileNameWithoutExtension());
-    juce::Array<int> order;
-    for (int i = 0; i < FlatQProcessor::numTargets(); ++i) order.add (i);
-    std::stable_sort (order.begin(), order.end(), [] (int a, int b) {
-        const bool ha = FlatQProcessor::targetName (a).startsWithIgnoreCase ("Harman"), hb = FlatQProcessor::targetName (b).startsWithIgnoreCase ("Harman");
-        return ha != hb ? ha : false; });
-    for (int i : order) m.addItem (i + 2, FlatQProcessor::targetName (i));
-    m.addSeparator();
-    m.addItem (1, "Choose a target CSV file...");
-    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&importButton).withParentComponent (this).withMinimumWidth (260),
-        [this, measurement] (int r)
-        {
-            if (r <= 0) return;
-            auto run = [this, measurement] (const juce::String& csv, const juce::String& label)
-            {
-                juce::String err;
-                if (! proc.importAutoEq (measurement, csv, label, err))
-                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not import", err);
-                profiles.refresh();
-            };
-            if (r >= 2) { run (FlatQProcessor::targetCsvText (r - 2), FlatQProcessor::targetName (r - 2)); return; }
-            chooser = std::make_unique<juce::FileChooser> ("Select a target (.csv)", measurement.getParentDirectory(), "*.csv");
-            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                [run] (const juce::FileChooser& fc) { auto f = fc.getResult(); if (f.existsAsFile()) run (f.loadFileAsString(), f.getFileNameWithoutExtension()); });
-        });
 }
 
 void FlatQEditor::showFilterMenu()
@@ -1173,21 +1286,9 @@ void FlatQEditor::resized()
     head64.removeFromLeft (10);
     logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it (like "from Sonarworks")
     brand.setBounds (head64.removeFromTop (16).withTrimmedLeft (3));
-    loadButton.setBounds (side.removeFromBottom (40).reduced (12, 4));
-    importButton.setBounds (side.removeFromBottom (48).reduced (12, 8).withTrimmedBottom (0));
-    if (MeasurementDb::get().available())
-    {
-        searchBox.setBounds (side.removeFromTop (40).reduced (12, 5));
-        brandPick.setBounds (side.removeFromTop (34).reduced (12, 3));
-        if (searching)
-        {
-            auto fr = side.removeFromTop (34).reduced (12, 3);
-            formFilter.setBounds (fr.removeFromLeft (fr.getWidth() * 2 / 5 - 3)); fr.removeFromLeft (6); targetPick.setBounds (fr);
-            resultsInfo.setBounds (side.removeFromTop (20).reduced (14, 0));
-        }
-    }
+    addButton.setBounds (side.removeFromBottom (52).reduced (12, 8));
     profiles.setBounds (side);
-    results.setBounds (side);
+    addScreen.setBounds (getLocalBounds());
 
     auto head = r.removeFromTop (headerH);
     menuDots.setBounds (juce::Rectangle<int> (head.getRight() - 42, head.getY() + 12, 30, 30));   // top right
