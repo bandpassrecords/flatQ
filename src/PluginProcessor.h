@@ -44,7 +44,7 @@ public:
     static int numBuiltInProfiles();
     static juce::String builtInProfileName (int index);       // display name (file name without extension)
     bool loadBuiltInProfile (int index, juce::String& error, bool applyHints = true);
-    static juce::String builtInProfileKind (int index);       // file extension in caps: FLATQ, LVLS, LVLSPROJ, TMREQ
+    static juce::String builtInProfileKind (int index);       // file extension in caps
     // AutoEq import: measurement CSV + one of the bundled (or any) target CSVs -> saved .flatq in importedProfilesDir(), loaded.
     static int numTargets();
     static juce::String targetName (int index);

@@ -795,7 +795,7 @@ AddProfileScreen::AddProfileScreen (FlatQProcessor& p) : proc (p)
     brandPick.setTooltip ("Browse by manufacturer: pick a brand to list all its headphones.");
     formFilter.setTooltip ("Only show measurements of this form factor");
     targetPick.setTooltip ("Target curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear and earbuds. Does not apply to finished AutoEq results or to ready-made profiles.");
-    loadFile.setTooltip ("Load a .flatq, .lvls, .lvlsproj or .tmreq profile from disk");
+    loadFile.setTooltip ("Load a FlatQ profile (.flatq) or an RME TotalMix profile (.tmreq) from disk");
     importCsv.setTooltip ("Import your own measurement (CSV with frequency and raw columns), then choose a target. The correction is target - measurement.");
 
     for (auto* c : std::initializer_list<juce::Component*> { &back, &title, &otherTitle, &brandL, &formL, &targetL, &resultsInfo, &searchBox,
@@ -853,7 +853,7 @@ void AddProfileScreen::pickMeasurement (int idx)
 
 void AddProfileScreen::chooseProfileFile()
 {
-    chooser = std::make_unique<juce::FileChooser> ("Select a profile", juce::File(), "*.flatq;*.lvls;*.lvlsproj;*.tmreq");
+    chooser = std::make_unique<juce::FileChooser> ("Select a profile", juce::File(), "*.flatq;*.tmreq");
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
         [this] (const juce::FileChooser& fc)
         {
@@ -956,7 +956,7 @@ void AddProfileScreen::paint (juce::Graphics& g)
         g.setColour (dim); g.setFont (juce::FontOptions (12.f));
         g.drawFittedText (desc, in.removeFromTop (60), juce::Justification::topLeft, 4);
     };
-    card (cardA, "Profile file", "Load a profile from disk. Supported files: .flatq, .lvls, .lvlsproj and .tmreq.");
+    card (cardA, "Profile file", "Load a profile from disk: a FlatQ profile (.flatq) or an RME TotalMix profile (.tmreq).");
     card (cardB, "Measurement CSV", "Import your own measurement (a CSV with frequency and raw columns, like the AutoEq ones). You choose the target next.");
 
     g.setColour (dim); g.setFont (juce::FontOptions (13.f));
@@ -1284,7 +1284,7 @@ void FlatQEditor::resized()
     aboutArea.setBounds (head64);
     logoMark.setBounds (head64.removeFromLeft (36).withSizeKeepingCentre (36, 36));
     head64.removeFromLeft (10);
-    logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it (like "from Sonarworks")
+    logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it 
     brand.setBounds (head64.removeFromTop (16).withTrimmedLeft (3));
     addButton.setBounds (side.removeFromBottom (52).reduced (12, 8));
     profiles.setBounds (side);
