@@ -9,6 +9,7 @@ FlatQLookAndFeel::FlatQLookAndFeel()
     setColour (juce::Label::textColourId, text);
     setColour (juce::Slider::thumbColourId, accent);
     setColour (juce::Slider::trackColourId, accent);
+    setColour (juce::Slider::rotarySliderFillColourId, accent);
     setColour (juce::Slider::backgroundColourId, track);
     setColour (juce::Slider::textBoxTextColourId, text);
     setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -43,6 +44,21 @@ void FlatQLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b,
     auto r = b.getLocalBounds().toFloat().reduced (0.5f);
     g.setColour (c); g.fillRoundedRectangle (r, 6.f);
     g.setColour (theme::divider); g.drawRoundedRectangle (r, 6.f, 1.f);
+}
+
+void FlatQLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos, float a0, float a1, juce::Slider& s)
+{
+    auto b = juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h).reduced (5.f);
+    const float r = juce::jmin (b.getWidth(), b.getHeight()) / 2.f;
+    const auto c = b.getCentre();
+    const float angle = a0 + pos * (a1 - a0);
+    juce::Path track, value;
+    track.addCentredArc (c.x, c.y, r, r, 0.f, a0, a1, true);
+    value.addCentredArc (c.x, c.y, r, r, 0.f, a0, angle, true);
+    g.setColour (theme::track); g.strokePath (track, juce::PathStrokeType (4.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour (s.findColour (juce::Slider::rotarySliderFillColourId)); g.strokePath (value, juce::PathStrokeType (4.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour (theme::text);   // pointer
+    g.drawLine (c.x + std::sin (angle) * r * 0.30f, c.y - std::cos (angle) * r * 0.30f, c.x + std::sin (angle) * r * 0.72f, c.y - std::cos (angle) * r * 0.72f, 2.f);
 }
 
 juce::Slider::SliderLayout FlatQLookAndFeel::getSliderLayout (juce::Slider& s)
@@ -648,7 +664,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 {
     setLookAndFeel (&laf);
     for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &brandPick, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logoMark, &logo, &brand, &inL, &outL, &trimL,
-                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &disabledCard, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
+                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
     logo.setFont (juce::FontOptions (26.f, juce::Font::bold));
@@ -713,8 +729,13 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         formFilter.setVisible (false); targetPick.setVisible (false); resultsInfo.setVisible (false); results.setVisible (false);
     }
 
-    disabledCard.setVisible (false);
-    disabledCard.onEnable = [this] { if (auto* prm = proc.apvts.getParameter ("bypass")) prm->setValueNotifyingHost (0.f); };
+    dryWet.setRotaryParameters (juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
+    dryWet.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 22);
+    dryWet.setTooltip ("Dry / Wet: mixes the untouched input (aligned with the filter's latency) with the equalized signal. 100 = fully equalized, 0 = untouched. Double-click to reset.");
+    dryWetL.setColour (juce::Label::textColourId, theme::dim); dryWetL.setJustificationType (juce::Justification::centredRight);
+    dryWetL.setTooltip (dryWet.getTooltip());
+    dryWetA = std::make_unique<SA> (p.apvts, "drywet", dryWet);
+    notices.setVisible (false);
     volumeIcon.setTooltip ("Mute / unmute the output");
     swap.setTooltip ("Swap the left and right input channels");
     muteA = std::make_unique<BA> (p.apvts, "mute", volumeIcon);
@@ -837,7 +858,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 
     setResizable (true, true);
     setResizeLimits (860, 520, 1600, 1000);
-    setSize (1100, 640);
+    setSize (1220, 660);   // a little wider than before: more room for the graph
     if (proc.getGraph().freqs.empty() && proc.getBuiltInIndex() < 0 && FlatQProcessor::numBuiltInProfiles() > 0)
     {
         juce::String err;
@@ -961,8 +982,23 @@ void FlatQEditor::refreshStatus()
         trimL.setColour (juce::Label::textColourId, trim.hasLimit && trim.getValue() >= trim.limit - 0.05 ? juce::Colour (0xffef4444) : theme::text);
     }
     graph.setBassLimit (bass > 20.5f ? bass : 0.f);
-    const bool off = a.getRawParameterValue ("bypass")->load() > 0.5f;   // calibration disabled: flag it in the middle of the graph
-    if (disabledCard.isVisible() != off) { disabledCard.setVisible (off); graph.setAlpha (off ? 0.3f : 1.f); }
+    {   // options that change the sound but are not visible: flag them in the middle of the graph
+        auto on = [&a] (const char* id) { return a.getRawParameterValue (id)->load() > 0.5f; };
+        auto turnOff = [this] (const char* id) { return [this, id] { if (auto* prm = proc.apvts.getParameter (id)) prm->setValueNotifyingHost (0.f); }; };
+        std::vector<NoticeStack::Notice> list;
+        juce::String sig;
+        if (on ("bypass")) { list.push_back ({ "Calibration disabled", "The EQ is bypassed: the audio passes through unchanged.", "Enable calibration", turnOff ("bypass") }); sig << "b"; }
+        if (on ("mute"))   { list.push_back ({ "Output muted", "No sound is leaving the plugin.", "Unmute", turnOff ("mute") }); sig << "m"; }
+        if (on ("mono"))   { list.push_back ({ "Mono is on", "Left and right are summed to mono, (L + R) / 2.", "Turn off mono", turnOff ("mono") }); sig << "o"; }
+        if (on ("swap"))   { list.push_back ({ "Left and right swapped", "The left and right input channels are exchanged.", "Swap back", turnOff ("swap") }); sig << "s"; }
+        if (sig != noticeSig)
+        {
+            noticeSig = sig;
+            notices.setNotices (std::move (list));
+            graph.setAlpha (on ("bypass") ? 0.3f : 1.f);
+            resized();
+        }
+    }
 }
 
 void FlatQEditor::timerCallback()
@@ -1036,8 +1072,11 @@ void FlatQEditor::resized()
     StatusItem* items[] = { &latency, &filter, &length, &smoothing, &limits, &preamp, &manual };
     const int w = status.getWidth() / 7;
     for (auto* it : items) it->setBounds (status.removeFromLeft (w));
+    auto dwRow = r.removeFromBottom (48);                 // Dry / Wet under the graph, on the right
+    dryWet.setBounds (dwRow.removeFromRight (122).reduced (0, 4));
+    dryWetL.setBounds (dwRow.removeFromRight (84));
     graph.setBounds (r);
-    disabledCard.setBounds (r.withSizeKeepingCentre (380, 150));
+    notices.setBounds (r.withSizeKeepingCentre (NoticeStack::kWidth, notices.preferredHeight()));
 
     // right strip: In / Out meters and the output trim fader
     skipExport.setBounds (strip.removeFromTop (headerH - 26).reduced (12, 9));

@@ -55,6 +55,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout FlatQProcessor::createLayout
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "autopreamp", 1 }, "Auto preamp", true));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypass", 1 }, "Bypass", false));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "bypassexport", 1 }, "Skip on export (offline render)", true));
+    l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "drywet", 1 }, "Dry/Wet",
+           NormalisableRange<float> (0.f, 100.f, 1.f), 100.f,
+           AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String ((int) v) + " %"; })));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "mono", 1 }, "Mono", false));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "mute", 1 }, "Mute output", false));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "swap", 1 }, "Swap L/R", false));
@@ -123,6 +126,9 @@ void FlatQProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     convolution.prepare (spec);
     outGain.reset (sampleRate, 0.02);
     muteGain.reset (sampleRate, 0.02);
+    mixGain.reset (sampleRate, 0.02);
+    mixGain.setCurrentAndTargetValue (apvts.getRawParameterValue ("drywet")->load() / 100.f);
+    dryCopy.setSize (2, samplesPerBlock, false, false, true);
     muteGain.setCurrentAndTargetValue (apvts.getRawParameterValue ("mute")->load() > 0.5f ? 0.f : 1.f);
     outGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (outputTrimDb()));
     firReady = false;
@@ -515,6 +521,25 @@ void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     if (manualBypass || skipForExport) { processDry (buffer); return; }
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
 
+    // Dry/Wet: keep a copy of the input; it is delayed by the reported latency so it lines up with the processed signal
+    mixGain.setTargetValue (apvts.getRawParameterValue ("drywet")->load() / 100.f);
+    const bool mixing = nch > 0 && (mixGain.isSmoothing() || mixGain.getTargetValue() < 0.999f);
+    if (mixing)
+    {
+        dryCopy.setSize (2, n, false, false, true);   // no reallocation unless the host sends a bigger block than announced
+        for (int c = 0; c < nch; ++c) dryCopy.copyFrom (c, 0, buffer, c, 0, n);
+    }
+    auto doMix = [&]
+    {
+        if (! mixing) return;
+        processDry (dryCopy);
+        for (int i = 0; i < n; ++i)
+        {
+            const float w = mixGain.getNextValue();
+            for (int c = 0; c < nch; ++c) { float* o = buffer.getWritePointer (c); o[i] = w * o[i] + (1.f - w) * dryCopy.getReadPointer (c)[i]; }
+        }
+    };
+
     if (mode == LowLatency)
     {
         juce::SpinLock::ScopedTryLockType lock (iirLock);
@@ -557,6 +582,7 @@ void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         convolution.process (ctx);
     }
 
+    doMix();   // dry / wet right after the EQ, before the output trim
     outGain.setTargetValue (juce::Decibels::decibelsToGain (outputTrimDb()));
     if (outGain.isSmoothing())
         for (int i = 0; i < n; ++i) { const float g = outGain.getNextValue(); for (int c = 0; c < nch; ++c) buffer.getWritePointer (c)[i] *= g; }

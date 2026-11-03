@@ -87,7 +87,8 @@ private:
     void parameterChanged (const juce::String&, float) override;
     float outputTrimDb() const;
     void applyMute (juce::AudioBuffer<float>&);
-    juce::SmoothedValue<float> muteGain;
+    juce::SmoothedValue<float> muteGain, mixGain;
+    juce::AudioBuffer<float> dryCopy;
 
     class DesignThread;   // design runs on a background thread (the IIR fit is not cheap)
     std::unique_ptr<DesignThread> designThread;

@@ -45,6 +45,7 @@ public:
     void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool, bool) override;
     // Slim groove with a solid accent fill; a slider with the "bipolar" property set fills from 0 instead of from the end.
     juce::Slider::SliderLayout getSliderLayout (juce::Slider&) override;
+    void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos, float startAngle, float endAngle, juce::Slider&) override;
     void drawLinearSlider (juce::Graphics&, int x, int y, int w, int h, float sliderPos, float minPos, float maxPos,
                            juce::Slider::SliderStyle, juce::Slider&) override;
 };
@@ -192,31 +193,54 @@ public:
     }
 };
 
-// Card shown over the graph while calibration is disabled, with a button to turn it back on.
-class DisabledCard : public juce::Component
+// Notices in the middle of the graph for options that change the sound but are not on screen (calibration off, mute,
+// mono, L/R swap), each with a button that turns the option off, so nobody is left wondering why it sounds different.
+class NoticeStack : public juce::Component
 {
 public:
-    DisabledCard()
+    struct Notice { juce::String title, detail, button; std::function<void()> action; };
+    static constexpr int kRow = 74, kWidth = 460;
+
+    void setNotices (std::vector<Notice> n)
     {
-        enable.setColour (juce::TextButton::buttonColourId, theme::accent);
-        enable.setColour (juce::TextButton::textColourOffId, theme::bg);
-        enable.onClick = [this] { if (onEnable) onEnable(); };
-        addAndMakeVisible (enable);
+        notices = std::move (n);
+        buttons.clear();
+        for (auto& x : notices)
+        {
+            auto* b = buttons.add (new juce::TextButton (x.button));
+            b->setColour (juce::TextButton::buttonColourId, theme::accent);
+            b->setColour (juce::TextButton::textColourOffId, theme::bg);
+            b->onClick = x.action;
+            addAndMakeVisible (b);
+        }
+        setVisible (! notices.empty());
+        resized(); repaint();
     }
-    std::function<void()> onEnable;
+    int preferredHeight() const { return 8 + (int) notices.size() * kRow; }
+
     void paint (juce::Graphics& g) override
     {
         auto r = getLocalBounds().toFloat().reduced (1.f);
         g.setColour (theme::panel.withAlpha (0.96f)); g.fillRoundedRectangle (r, 10.f);
         g.setColour (theme::dim.withAlpha (0.5f)); g.drawRoundedRectangle (r, 10.f, 1.f);
-        g.setColour (theme::text); g.setFont (juce::FontOptions (19.f, juce::Font::bold));
-        g.drawText ("Calibration disabled", 0, 18, getWidth(), 26, juce::Justification::centred);
-        g.setColour (theme::dim); g.setFont (juce::FontOptions (13.f));
-        g.drawText ("The EQ is bypassed: the audio passes through unchanged.", 12, 48, getWidth() - 24, 20, juce::Justification::centred);
+        for (int i = 0; i < (int) notices.size(); ++i)
+        {
+            const int y = 4 + i * kRow;
+            if (i > 0) { g.setColour (theme::divider); g.drawHorizontalLine (y, 14.f, (float) getWidth() - 14.f); }
+            g.setColour (theme::text); g.setFont (juce::FontOptions (16.f, juce::Font::bold));
+            g.drawText (notices[(size_t) i].title, 20, y + 12, getWidth() - 190, 22, juce::Justification::centredLeft, true);
+            g.setColour (theme::dim); g.setFont (juce::FontOptions (12.f));
+            g.drawFittedText (notices[(size_t) i].detail, 20, y + 36, getWidth() - 190, 30, juce::Justification::topLeft, 2);
+        }
     }
-    void resized() override { enable.setBounds (getLocalBounds().withSizeKeepingCentre (190, 34).withY (getHeight() - 56)); }
+    void resized() override
+    {
+        for (int i = 0; i < buttons.size(); ++i)
+            buttons[i]->setBounds (getWidth() - 160, 4 + i * kRow + (kRow - 34) / 2, 144, 34);
+    }
 private:
-    juce::TextButton enable { "Enable calibration" };
+    std::vector<Notice> notices;
+    juce::OwnedArray<juce::TextButton> buttons;
 };
 
 // Clickable "LABEL / value ^" cell in the bottom status row.
@@ -336,7 +360,10 @@ private:
     OutputFader trim;
     SpeakerButton volumeIcon;
     SwapButton swap;
-    DisabledCard disabledCard;
+    juce::Slider dryWet { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxRight };
+    juce::Label dryWetL { {}, "Dry / Wet" };
+    NoticeStack notices;
+    juce::String noticeSig;
     PowerButton bypass;
     bool faderSync = false;
     double axisPre = 1e9;
@@ -352,4 +379,5 @@ private:
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<BA> bypassA, skipA, monoA, muteA, swapA;
+    std::unique_ptr<SA> dryWetA;
 };
