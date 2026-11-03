@@ -302,7 +302,8 @@ private:
     ResponseGraph graph;
     ProfileList profiles { proc };
     juce::TextEditor searchBox;
-    juce::ComboBox formFilter, targetPick;
+    juce::ComboBox brandPick, formFilter, targetPick;
+    juce::String selectedBrand;
     juce::Label resultsInfo;
     MeasurementList results;
     bool searching = false;

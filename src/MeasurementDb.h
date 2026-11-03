@@ -4,6 +4,7 @@
 #pragma once
 #include "AutoEqImport.h"
 #include <juce_core/juce_core.h>
+#include <map>
 #if FLATQ_HAS_MEASUREMENTS
  #include <MeasurementData.h>
 #endif
@@ -20,7 +21,10 @@ public:
 
     // Entries matching every word of `query` (name, brand, source or rig), optionally of one form (over-ear / in-ear / earbud).
     // Sorted by name, then by how much the source is trusted. At most maxResults.
-    std::vector<int> search (const juce::String& query, const juce::String& form, int maxResults) const
+    struct Brand { juce::String name; int count = 0; };
+    const std::vector<Brand>& brands() const { return brandList; }   // sorted by name
+
+    std::vector<int> search (const juce::String& query, const juce::String& form, const juce::String& brand, int maxResults) const
     {
         const auto words = juce::StringArray::fromTokens (query.toLowerCase().trim(), " ", "");
         std::vector<int> hits;
@@ -28,6 +32,7 @@ public:
         {
             const auto& e = entries[(size_t) i];
             if (form.isNotEmpty() && e.form != form) continue;
+            if (brand.isNotEmpty() && e.brand != brand) continue;
             bool all = true;
             for (auto& w : words) if (! e.haystack.contains (w)) { all = false; break; }
             if (all) hits.push_back (i);
@@ -59,6 +64,7 @@ public:
 private:
     static constexpr int kPoints = 480;
     std::vector<Entry> entries;
+    std::vector<Brand> brandList;
     std::vector<int16_t> curves;
     bool curvesLoaded = false;
 
@@ -81,6 +87,10 @@ private:
             e.haystack = (e.name + " " + e.brand + " " + e.source + " " + e.rig).toLowerCase();
             entries.push_back (std::move (e));
         }
+        std::map<juce::String, int> counts;
+        for (auto& e : entries) if (e.brand.isNotEmpty()) ++counts[e.brand];
+        for (auto& kv : counts) brandList.push_back ({ kv.first, kv.second });
+        std::sort (brandList.begin(), brandList.end(), [] (const Brand& a, const Brand& b) { return a.name.compareIgnoreCase (b.name) < 0; });
        #endif
     }
 

@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include <map>
 
 // ------------------------------------------------------------------------------------------------ look and feel
 FlatQLookAndFeel::FlatQLookAndFeel()
@@ -648,7 +649,7 @@ namespace
 FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
     setLookAndFeel (&laf);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logo, &inL, &outL, &trimL,
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &brandPick, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logo, &inL, &outL, &trimL,
                                                               &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &disabledCard, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
@@ -661,6 +662,27 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     {
         auto& db = MeasurementDb::get();
         searchBox.setVisible (db.available());
+        brandPick.setVisible (db.available());
+        {   // brands grouped by their first letter, in sub-menus (500 brands in one flat list would be unusable)
+            auto& root = *brandPick.getRootMenu();
+            root.addItem (1, "Browse by brand...");
+            std::map<juce::String, juce::PopupMenu> groups;
+            int id = 2;
+            for (auto& b : db.brands())
+            {
+                const auto c = b.name.substring (0, 1).toUpperCase();
+                groups[juce::CharacterFunctions::isLetter (c[0]) ? c : juce::String ("0-9")].addItem (id++, b.name + "  (" + juce::String (b.count) + ")");
+            }
+            for (auto& g : groups) root.addSubMenu (g.first, g.second);
+            brandPick.setSelectedId (1, juce::dontSendNotification);
+            brandPick.setTooltip ("Browse the measurements by manufacturer: pick a brand to list all its headphones.");
+            brandPick.onChange = [this]
+            {
+                const int sel = brandPick.getSelectedId();
+                selectedBrand = sel >= 2 ? MeasurementDb::get().brands()[(size_t) sel - 2].name : juce::String();
+                updateSearch();
+            };
+        }
         formFilter.addItemList ({ "All", "Over-ear", "In-ear", "Earbud" }, 1);
         formFilter.setSelectedId (1, juce::dontSendNotification);
         targetPick.addItem ("Auto", 1);
@@ -684,6 +706,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
             if (! proc.importMeasurement (idx, targetPick.getSelectedId() - 2, err))
                 juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Could not import", err);
             searchBox.clear();   // back to the profile list, now with the new profile selected
+            brandPick.setSelectedId (1, juce::dontSendNotification); selectedBrand = {};
             updateSearch();
             profiles.refresh();
         };
@@ -826,14 +849,14 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 
 void FlatQEditor::updateSearch()
 {
-    searching = searchBox.getText().trim().length() >= 2;
+    searching = searchBox.getText().trim().length() >= 2 || selectedBrand.isNotEmpty();
     for (auto* c : std::initializer_list<juce::Component*> { &formFilter, &targetPick, &resultsInfo, &results }) c->setVisible (searching);
     profiles.setVisible (! searching);
     if (searching)
     {
         static const char* forms[] = { "", "over-ear", "in-ear", "earbud" };
-        auto hits = MeasurementDb::get().search (searchBox.getText(), forms[juce::jlimit (0, 3, formFilter.getSelectedId() - 1)], 300);
-        resultsInfo.setText (hits.empty() ? "No measurements found" : juce::String (hits.size()) + (hits.size() >= 300 ? "+ results (refine the search)" : " results"), juce::dontSendNotification);
+        auto hits = MeasurementDb::get().search (searchBox.getText(), forms[juce::jlimit (0, 3, formFilter.getSelectedId() - 1)], selectedBrand, 500);
+        resultsInfo.setText (hits.empty() ? "No measurements found" : juce::String (hits.size()) + (hits.size() >= 500 ? "+ results (refine the search)" : " results"), juce::dontSendNotification);
         results.setHits (std::move (hits));
     }
     resized();
@@ -990,6 +1013,7 @@ void FlatQEditor::resized()
     if (MeasurementDb::get().available())
     {
         searchBox.setBounds (side.removeFromTop (40).reduced (12, 5));
+        brandPick.setBounds (side.removeFromTop (34).reduced (12, 3));
         if (searching)
         {
             auto fr = side.removeFromTop (34).reduced (12, 3);
