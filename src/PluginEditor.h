@@ -110,12 +110,19 @@ class OutputFader : public juce::Slider
 {
 public:
     OutputFader() : juce::Slider (juce::Slider::LinearVertical, juce::Slider::NoTextBox) {}
-    bool hasLimit = false; double limit = 0;
+    bool hasLimit = false, muted = false; double limit = 0;
     void paint (juce::Graphics& g) override
     {
         const float cx = (float) getWidth() * 0.5f;
         const float yTop = (float) getPositionOfValue (getMaximum()), yBot = (float) getPositionOfValue (getMinimum());
         const float yLim = hasLimit ? (float) getPositionOfValue (limit) : yTop, yVal = (float) getPositionOfValue (getValue());
+        if (muted)   // muted: one plain line, no limit zone and no fill
+        {
+            g.setColour (theme::track.withAlpha (0.45f)); g.fillRoundedRectangle (cx - 2.5f, yTop, 5.f, yBot - yTop, 2.5f);
+            g.setColour (theme::bg); g.fillEllipse (cx - 8.f, yVal - 8.f, 16.f, 16.f);
+            g.setColour (theme::dim); g.drawEllipse (cx - 8.f, yVal - 8.f, 16.f, 16.f, 2.f);
+            return;
+        }
         g.setColour (theme::track); g.fillRoundedRectangle (cx - 2.5f, yTop, 5.f, yBot - yTop, 2.5f);
         if (hasLimit) { g.setColour (juce::Colour (0xffef4444)); g.fillRoundedRectangle (cx - 2.5f, yTop, 5.f, yLim - yTop + 2.5f, 2.5f); }
         if (hasLimit && yVal > yLim)   // room left to raise the fader: lighter accent between the thumb and the limit

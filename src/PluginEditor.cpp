@@ -975,11 +975,12 @@ void FlatQEditor::refreshStatus()
         faderSync = true;
         if (std::abs (axisPre - pre) > 1e-6) { axisPre = pre; trim.setDoubleClickReturnValue (true, pre); }
         trim.hasLimit = safe; trim.limit = pre;
+        trim.muted = a.getRawParameterValue ("mute")->load() > 0.5f;
         if (! trim.isMouseButtonDown()) trim.setValue (pre + (double) a.getRawParameterValue ("trim")->load(), juce::dontSendNotification);
         faderSync = false;
         trim.repaint();
-        trimL.setText (juce::String (trim.getValue(), 1) + " dB", juce::dontSendNotification);
-        trimL.setColour (juce::Label::textColourId, trim.hasLimit && trim.getValue() >= trim.limit - 0.05 ? juce::Colour (0xffef4444) : theme::text);
+        trimL.setText (trim.muted ? juce::String ("Muted") : juce::String (trim.getValue(), 1) + " dB", juce::dontSendNotification);
+        trimL.setColour (juce::Label::textColourId, trim.muted || (trim.hasLimit && trim.getValue() >= trim.limit - 0.05) ? juce::Colour (0xffef4444) : theme::text);
     }
     graph.setBassLimit (bass > 20.5f ? bass : 0.f);
     {   // options that change the sound but are not visible: flag them in the middle of the graph
