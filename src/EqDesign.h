@@ -5,6 +5,7 @@
 #include "Profile.h"
 #include <algorithm>
 #include <cmath>
+#include <array>
 #include <complex>
 
 #ifndef M_PI   // MSVC does not define it by default
@@ -13,45 +14,110 @@
 
 namespace flatq {
 
+// Slope limiter (idea from AutoEq's equalize()): y is a curve in dB sampled at ascending freqs. Boosts are limited so
+// they never rise faster than maxSlopeDbOct, once walking left-to-right and once right-to-left; the pointwise minimum
+// keeps both flanks of a peak gentle, so narrow spikes are cut down while broad corrections pass through.
+// Cuts are left untouched (limiting them would widen dips instead of narrowing them).
+inline void limitSlope(const std::vector<double>& freqs, std::vector<double>& y, double maxSlopeDbOct) {
+    const size_t n = y.size();
+    if (maxSlopeDbOct <= 0 || n < 2 || freqs.size() != n) return;
+    std::vector<double> pos(n), ltr, rtl;
+    for (size_t i = 0; i < n; ++i) pos[i] = std::max(0.0, y[i]);
+    ltr = rtl = pos;
+    for (size_t i = 1; i < n; ++i)
+        ltr[i] = std::min(pos[i], ltr[i - 1] + maxSlopeDbOct * std::log2(freqs[i] / freqs[i - 1]));
+    for (size_t i = n - 1; i-- > 0;)
+        rtl[i] = std::min(pos[i], rtl[i + 1] + maxSlopeDbOct * std::log2(freqs[i + 1] / freqs[i]));
+    for (size_t i = 0; i < n; ++i) y[i] = std::min(y[i], 0.0) + std::min(ltr[i], rtl[i]);
+}
+
+// Centres of the manual (advanced) per-frequency trim: ISO third-octave, 20 Hz .. 20 kHz.
+inline const std::vector<double>& manualFreqs() {
+    static const std::vector<double> f = { 20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800,
+                                           1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000 };
+    return f;
+}
+
 struct DesignOptions {
     bool   clampToMaxBoost = true;   // limit boosts: global maxBoostDb and the profile's own per-frequency ceiling
     double maxBoostDb      = 12.0;   // global boost limit (dB), applies to every profile
     double smoothingOct    = 0.0;    // fractional-octave smoothing width of the target (0 = off, 1/3 = third-octave)
+    double trebleSmoothOct = 0.0;    // width used above ~6 kHz (blended in from ~1.5 kHz); 0 = same as smoothingOct
     double bassLimitHz     = 0.0;    // 0 = off. Correction fades out between bassLimitHz/2 and bassLimitHz and is 0 dB below
+    double maxSlopeDbOct   = 0.0;    // 0 = off. Boosts may not rise faster than this (dB/octave); see limitSlope()
+    double trebleGain      = 1.0;    // scales the correction above ~8 kHz (blended in from ~4 kHz); 1 = untouched
     bool   autoPreamp      = true;   // lower overall gain so the EQ never boosts above 0 dB
     double extraGainDb     = 0.0;    // user trim
+    std::array<std::vector<double>, 2> manualDb;   // manual per-band offsets (dB) per channel at manualFreqs(); empty = none. Applied last, after the limits
+
+    // Slope-limited curves, sampled on a log grid per channel. Filled lazily by targetDb(); valid for ONE profile,
+    // so make a fresh DesignOptions (or call resetCache) whenever the profile changes.
+    mutable std::vector<std::vector<double>> slopeCache;
+    void resetCache() { slopeCache.clear(); }
 };
 
-// Correction before smoothing/limits: profile response with the bass fade-out applied.
+// Smooth 0..1 blend (raised cosine) in log-frequency between f0 and f1.
+inline double logBlend(double f, double f0, double f1) {
+    double t = std::clamp(std::log2(f / f0) / std::log2(f1 / f0), 0.0, 1.0);
+    return 0.5 - 0.5 * std::cos(M_PI * t);
+}
+
+// Correction before smoothing/limits: profile response with the bass fade-out and treble gain applied.
 inline double rawTargetDb(const Profile& p, int ch, double f, const DesignOptions& o) {
     double g = p.correctionDb(ch, f);
     if (o.bassLimitHz > 0 && f < o.bassLimitHz) {
         double t = std::clamp(std::log2(f / (o.bassLimitHz * 0.5)), 0.0, 1.0);     // 0 at limit/2 ... 1 at limit
         g *= 0.5 - 0.5 * std::cos(M_PI * t);                                         // raised-cosine fade
     }
+    if (o.trebleGain != 1.0) g *= 1.0 + (o.trebleGain - 1.0) * logBlend(f, 4000.0, 8000.0);
     return g;
 }
 
-// Target response in dB at f for channel ch, after bass fade, smoothing and boost limits. (preamp not included)
+// Smoothing width in octaves at f (frequency dependent: normal width in the mids, treble width above ~6 kHz).
+inline double smoothWidthOct(double f, const DesignOptions& o) {
+    const double tw = o.trebleSmoothOct > 0 ? o.trebleSmoothOct : o.smoothingOct;
+    return o.smoothingOct + (tw - o.smoothingOct) * logBlend(f, 1500.0, 6000.0);
+}
+
+inline double smoothedDb(const Profile& p, int ch, double f, const DesignOptions& o) {
+    const double w = smoothWidthOct(f, o);
+    if (w <= 0) return rawTargetDb(p, ch, f, o);
+    const double sigma = w / 2.355;                // Gaussian smoothing in log-frequency, sigma = width / 2.355 octaves
+    double sum = 0, wsum = 0;
+    for (int k = -9; k <= 9; ++k) {
+        double x = k / 3.0 * sigma, wt = std::exp(-0.5 * (x / sigma) * (x / sigma));
+        sum += wt * rawTargetDb(p, ch, f * std::pow(2.0, x), o); wsum += wt;
+    }
+    return sum / wsum;
+}
+
+// Target response in dB at f for channel ch, after bass fade, smoothing, slope limit and boost limits. (preamp not included)
 inline double targetDb(const Profile& p, int ch, double f, const DesignOptions& o) {
     double g;
-    if (o.smoothingOct > 0) {                       // Gaussian smoothing in log-frequency, sigma = width / 2.355 octaves
-        const double sigma = o.smoothingOct / 2.355;
-        double sum = 0, wsum = 0;
-        for (int k = -9; k <= 9; ++k) {
-            double x = k / 3.0 * sigma, w = std::exp(-0.5 * (x / sigma) * (x / sigma));
-            sum += w * rawTargetDb(p, ch, f * std::pow(2.0, x), o); wsum += w;
+    if (o.maxSlopeDbOct > 0) {
+        constexpr double kLo = 1.0, kHi = 100000.0; constexpr int kPerOct = 48;
+        const int n = int(std::ceil(std::log2(kHi / kLo) * kPerOct)) + 1;
+        if (o.slopeCache.size() <= size_t(ch)) o.slopeCache.resize(size_t(ch) + 1);
+        auto& c = o.slopeCache[size_t(ch)];
+        if (c.empty()) {
+            std::vector<double> fr(n); c.resize(n);
+            for (int i = 0; i < n; ++i) { fr[i] = kLo * std::pow(2.0, double(i) / kPerOct); c[i] = smoothedDb(p, ch, fr[i], o); }
+            limitSlope(fr, c, o.maxSlopeDbOct);
         }
-        g = sum / wsum;
-    } else g = rawTargetDb(p, ch, f, o);
+        const double pos = std::clamp(std::log2(std::max(f, kLo) / kLo) * kPerOct, 0.0, double(n - 1));
+        const int i = std::min(int(pos), n - 2); const double t = pos - i;
+        g = c[i] * (1 - t) + c[i + 1] * t;
+    } else g = smoothedDb(p, ch, f, o);
     if (o.clampToMaxBoost) g = std::min({ g, o.maxBoostDb, p.ceilingDb(f) });
+    const auto& m = o.manualDb[size_t(std::min(std::max(ch, 0), 1))];
+    if (m.size() == manualFreqs().size()) g += interpDb(manualFreqs(), m, f);
     return g;
 }
 
 // One preamp for all channels (so L/R balance is preserved): minus the highest boost anywhere.
 inline double preampDb(const Profile& p, const DesignOptions& o) {
     double peak = 0;
-    for (int ch = 0; ch < p.channels(); ++ch)
+    for (int ch = 0; ch < 2; ++ch)            // both channels: manual offsets can differ even on a one-response profile
         for (int i = 0; i < 600; ++i)
             peak = std::max(peak, targetDb(p, ch, 20.0 * std::pow(1100.0, i / 599.0), o));
     return (o.autoPreamp ? -peak : 0.0) + o.extraGainDb;
@@ -96,6 +162,33 @@ inline std::vector<float> designLinearPhase(const Profile& p, int ch, double sam
         int src = ((n - taps / 2 - shift) % taps + taps) % taps;   // rotate so peak sits at taps/2
         double w = 0.5 - 0.5 * std::cos(2 * M_PI * n / double(taps));   // Hann
         h[n] = float(H[src].real() * w);
+    }
+    return h;
+}
+
+// Minimum-phase FIR: same magnitude as designLinearPhase but no pre-ringing and ~0 latency (cepstral method).
+// taps must be a power of two. The response is designed on a 4x longer FFT and truncated with a short fade-out.
+inline std::vector<float> designMinPhase(const Profile& p, int ch, double sampleRate, int taps, double pre, const DesignOptions& o = {}) {
+    const size_t N = size_t(taps) * 4;
+    std::vector<std::complex<double>> c(N);
+    for (size_t k = 0; k <= N / 2; ++k) {
+        double f = std::max(1.0, double(k) * sampleRate / double(N));
+        double lg = std::log(std::pow(10.0, (targetDb(p, ch, f, o) + pre) / 20.0));
+        c[k] = lg;
+        if (k > 0 && k < N / 2) c[N - k] = lg;
+    }
+    fftInPlace(c, true);                                   // real cepstrum
+    for (size_t n = 1; n < N / 2; ++n) c[n] *= 2.0;        // fold onto the causal part
+    for (size_t n = N / 2 + 1; n < N; ++n) c[n] = 0;
+    fftInPlace(c, false);
+    for (auto& x : c) x = std::exp(x);                     // exp(log-mag + j*phase)
+    fftInPlace(c, true);
+    const int shift = std::clamp(int(std::lround(p.delayMs(ch) * sampleRate / 1000.0)), 0, taps / 4);
+    std::vector<float> h(size_t(taps), 0.0f);
+    const int fade = taps / 8;
+    for (int n = shift; n < taps; ++n) {
+        double w = n < taps - fade ? 1.0 : 0.5 + 0.5 * std::cos(M_PI * double(n - (taps - fade)) / double(fade));
+        h[size_t(n)] = float(c[size_t(n - shift)].real() * w);
     }
     return h;
 }

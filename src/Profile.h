@@ -56,6 +56,7 @@ struct Profile {
             p->d = t->toFlatq(base);
         } else { if (err) *err = "unsupported file type (use .flatq, .lvls, .lvlsproj or .tmreq)"; return nullptr; }
         if (p->d.name.empty()) p->d.name = base;
+        if (p->d.hintBassLimitHz < 0 && p->d.hintMaxBoostDb < 0) p->d.suggestHints();
         p->name = p->d.name;
         return p;
     }

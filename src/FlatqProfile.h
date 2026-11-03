@@ -15,6 +15,7 @@
 //     band 1000 2.0 -3.5           # parametric peaking band: Hz, Q, dB (any number, stacked on the curve)
 //   hint max_boost_db 9            # optional recommended plugin settings, applied when the profile is loaded
 //   hint bass_limit_hz 50
+//   hint smooth_oct 0.0833         # also: treble_smooth_oct, slope_db_oct
 //   ceiling log 355 20 22000       # optional max-boost limit (dB) per frequency
 //     ...
 //   end
@@ -82,10 +83,28 @@ struct FlatqProfile {
     std::array<Channel, 2> ch;
     bool sameBoth = true;                    // true: ch[0] applies to both channels
     std::vector<double> ceilFreq, ceilGain;  // optional boost ceiling
-    double hintMaxBoostDb = -1, hintBassLimitHz = -1;   // recommended settings (< 0 = none)
+    double hintMaxBoostDb = -1, hintBassLimitHz = -1, hintSmoothOct = -1, hintTrebleSmoothOct = -1, hintSlopeDbOct = -1;   // recommended settings (< 0 = none)
     std::vector<std::string> warnings;
 
     int channels() const { return sameBoth ? 1 : 2; }
+
+    // Suggests settings from the curve itself (used for imports that carry no recommendation). If the correction asks for
+    // a big boost at the bottom of the spectrum, the device is rolling off there and boosting cannot restore the output:
+    // it only costs headroom (the preamp follows the peak boost) and risks the drivers. The bass limit goes where the
+    // correction first exceeds +6 dB (coming down from 200 Hz), rounded up to 5 Hz, and the max boost is 6 dB.
+    // Nothing is suggested when the correction at 20 Hz stays within +12 dB.
+    void suggestHints() {
+        double knee = 0, at20 = -1e9;
+        for (int c = 0; c < channels(); ++c) {
+            const Channel& k = ch[size_t(c)];
+            at20 = std::max(at20, k.responseDb(20.0));
+            for (double f = 200.0; f >= 20.0; f *= std::pow(2.0, -1.0 / 48.0))
+                if (k.responseDb(f) > 6.0) { knee = std::max(knee, f); break; }
+        }
+        if (at20 <= 12.0 || knee <= 0) return;
+        hintBassLimitHz = std::ceil(knee / 5.0) * 5.0;
+        hintMaxBoostDb = 6.0;
+    }
 
     // ------------------------------------------------------------------ text format
     static std::optional<FlatqProfile> parse(const std::string& text, std::string* err = nullptr) {
@@ -129,7 +148,8 @@ struct FlatqProfile {
                 else if (c == "R") { cur = &p.ch[1]; sawR = true; p.sameBoth = false; }
                 else return fail("channel must be L, R or LR", ln);
             }
-            else if (kw == "hint") { std::string k; double v = 0; ls >> k >> v; if (k == "max_boost_db") p.hintMaxBoostDb = v; else if (k == "bass_limit_hz") p.hintBassLimitHz = v; }
+            else if (kw == "hint") { std::string k; double v = 0; ls >> k >> v; if (k == "max_boost_db") p.hintMaxBoostDb = v; else if (k == "bass_limit_hz") p.hintBassLimitHz = v;
+                else if (k == "smooth_oct") p.hintSmoothOct = v; else if (k == "treble_smooth_oct") p.hintTrebleSmoothOct = v; else if (k == "slope_db_oct") p.hintSlopeDbOct = v; }
             else if (kw == "delay_ms") ls >> cur->delayMs;
             else if (kw == "gain_db") ls >> cur->gainDb;
             else if (kw == "band") { ParamBand b; if (!(ls >> b.freq >> b.q >> b.gainDb) || b.freq <= 0 || b.q <= 0) return fail("band needs: freq Q gain", ln); cur->bands.push_back(b); }
@@ -148,6 +168,9 @@ struct FlatqProfile {
         std::string o = "# FlatQ profile\nflatq 1\nname " + name + "\n";
         if (hintMaxBoostDb >= 0) o += "hint max_boost_db " + std::to_string(hintMaxBoostDb) + "\n";
         if (hintBassLimitHz >= 0) o += "hint bass_limit_hz " + std::to_string(hintBassLimitHz) + "\n";
+        if (hintSmoothOct >= 0) o += "hint smooth_oct " + std::to_string(hintSmoothOct) + "\n";
+        if (hintTrebleSmoothOct >= 0) o += "hint treble_smooth_oct " + std::to_string(hintTrebleSmoothOct) + "\n";
+        if (hintSlopeDbOct >= 0) o += "hint slope_db_oct " + std::to_string(hintSlopeDbOct) + "\n";
         auto num = [](double v) { char b[40]; std::snprintf(b, sizeof b, "%.6f", v);
             std::string s = b; if (s.find('.') != std::string::npos) { while (s.back() == '0') s.pop_back(); if (s.back() == '.') s.pop_back(); }
             return s == "-0" ? std::string("0") : s; };
