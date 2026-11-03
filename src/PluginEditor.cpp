@@ -283,12 +283,13 @@ void LevelMeter::paint (juce::Graphics& g)
 {
     using namespace theme;
     const int gap = 3;
-    const float bw = ((float) getWidth() - gap) / 2.f;
-    for (int c = 0; c < 2; ++c)
+    const int nBars = mono ? 1 : 2;
+    const float bw = ((float) getWidth() - (float) gap * (float) (nBars - 1)) / (float) nBars;
+    for (int c = 0; c < nBars; ++c)
     {
         auto bar = juce::Rectangle<float> ((bw + gap) * (float) c, 0.f, bw, (float) getHeight());
         g.setColour (divider); g.fillRoundedRectangle (bar, 2.f);
-        const float db = juce::Decibels::gainToDecibels (src[(size_t) c].load(), -80.f);
+        const float db = juce::Decibels::gainToDecibels (mono ? juce::jmax (src[0].load(), src[1].load()) : src[(size_t) c].load(), -80.f);
         const float pos = juce::jlimit (0.f, 1.f, (db + 60.f) / 63.f);
         held[c] = juce::jmax (pos, held[c] - 0.006f);
         auto fill = bar.withTop (bar.getBottom() - bar.getHeight() * pos);
@@ -652,6 +653,90 @@ namespace
         bool updating = false;
     };
 
+    // About FlatQ: shown when the logo / wordmark is clicked.
+    class AboutPanel : public juce::Component
+    {
+    public:
+        AboutPanel()
+        {
+            addAndMakeVisible (mark);
+            title.setFont (juce::FontOptions (26.f, juce::Font::bold)); title.setText ("FlatQ", juce::dontSendNotification);
+            sub.setText ("by BandPass Records  -  version " + juce::String (JucePlugin_VersionString), juce::dontSendNotification);
+            sub.setColour (juce::Label::textColourId, theme::dim);
+            body.setText ("Corrects your headphones or monitors toward a flat response.\n\n"
+                          "Load a Sonarworks, RME TotalMix or FlatQ profile, or search the AutoEq measurement database and build a profile "
+                          "from any measurement and target. Use it as a minimum-phase or linear-phase FIR, or as a low-latency IIR.",
+                          juce::dontSendNotification);
+            body.setFont (juce::FontOptions (13.f)); body.setJustificationType (juce::Justification::topLeft);
+            credits.setText ("Built with JUCE. Equalization method and measurement data from AutoEq (MIT) and the original measurement "
+                             "authors; the measurements are for personal use only.", juce::dontSendNotification);
+            credits.setFont (juce::FontOptions (11.f)); credits.setColour (juce::Label::textColourId, theme::dim);
+            credits.setJustificationType (juce::Justification::topLeft);
+            link.setButtonText ("flatq.bandpassrecords.com");
+            link.setURL (juce::URL ("https://flatq.bandpassrecords.com"));
+            link.setFont (juce::FontOptions (13.f), false);
+            link.setColour (juce::HyperlinkButton::textColourId, theme::accent);
+            for (auto* c : std::initializer_list<juce::Component*> { &title, &sub, &body, &credits, &link }) addAndMakeVisible (c);
+            setSize (420, 290);
+        }
+        void paint (juce::Graphics& g) override { g.fillAll (theme::panel); }
+        void resized() override
+        {
+            auto r = getLocalBounds().reduced (20, 18);
+            auto top = r.removeFromTop (56);
+            mark.setBounds (top.removeFromLeft (56).withSizeKeepingCentre (52, 52)); top.removeFromLeft (14);
+            title.setBounds (top.removeFromTop (32)); sub.setBounds (top);
+            r.removeFromTop (10);
+            body.setBounds (r.removeFromTop (100));
+            link.setBounds (r.removeFromTop (24).withWidth (200));
+            r.removeFromTop (6);
+            credits.setBounds (r);
+        }
+    private:
+        LogoMark mark;
+        juce::Label title, sub, body, credits;
+        juce::HyperlinkButton link;
+    };
+
+    // Settings: a few persisted preferences (shared by every instance) and shortcuts to the data folders.
+    class SettingsPanel : public juce::Component
+    {
+    public:
+        explicit SettingsPanel (std::function<void (bool)> tooltipsChanged) : onTooltips (std::move (tooltipsChanged))
+        {
+            loadLast.setButtonText ("Load the last used profile on start");
+            loadLast.setToggleState (FlatQProcessor::getSetting ("loadLastProfile", true), juce::dontSendNotification);
+            loadLast.setTooltip ("A new instance opens with the profile you used last. When off, it opens with the first profile in the list.");
+            loadLast.onClick = [this] { FlatQProcessor::setSetting ("loadLastProfile", loadLast.getToggleState()); };
+            tips.setButtonText ("Show tooltips");
+            tips.setToggleState (FlatQProcessor::getSetting ("tooltips", true), juce::dontSendNotification);
+            tips.onClick = [this] { FlatQProcessor::setSetting ("tooltips", tips.getToggleState()); if (onTooltips) onTooltips (tips.getToggleState()); };
+            profilesBtn.setButtonText ("Open profiles folder");
+            profilesBtn.onClick = [] { FlatQProcessor::userProfilesDir().createDirectory(); FlatQProcessor::userProfilesDir().revealToUser(); };
+            dataBtn.setButtonText ("Open settings folder");
+            dataBtn.onClick = [] { FlatQProcessor::appDataDir().createDirectory(); FlatQProcessor::appDataDir().revealToUser(); };
+            for (auto* c : std::initializer_list<juce::Component*> { &heading, &loadLast, &tips, &profilesBtn, &dataBtn }) addAndMakeVisible (c);
+            heading.setText ("Settings", juce::dontSendNotification); heading.setFont (juce::FontOptions (16.f, juce::Font::bold));
+            setSize (380, 210);
+        }
+        void paint (juce::Graphics& g) override { g.fillAll (theme::panel); }
+        void resized() override
+        {
+            auto r = getLocalBounds().reduced (16, 12);
+            heading.setBounds (r.removeFromTop (28));
+            loadLast.setBounds (r.removeFromTop (30));
+            tips.setBounds (r.removeFromTop (30));
+            r.removeFromTop (8);
+            profilesBtn.setBounds (r.removeFromTop (32)); r.removeFromTop (8);
+            dataBtn.setBounds (r.removeFromTop (32));
+        }
+    private:
+        std::function<void (bool)> onTooltips;
+        juce::Label heading;
+        juce::ToggleButton loadLast, tips;
+        juce::TextButton profilesBtn, dataBtn;
+    };
+
     juce::String smoothName (int i)
     {
         static const char* n[] = { "Off", "1/24 oct", "1/12 oct", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct" };
@@ -664,7 +749,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 {
     setLookAndFeel (&laf);
     for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &results, &searchBox, &brandPick, &formFilter, &targetPick, &resultsInfo, &loadButton, &importButton, &title, &subtitle, &logoMark, &logo, &brand, &inL, &outL, &trimL,
-                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
+                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
     logo.setFont (juce::FontOptions (26.f, juce::Font::bold));
@@ -735,6 +820,13 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     dryWetL.setColour (juce::Label::textColourId, theme::dim); dryWetL.setJustificationType (juce::Justification::centredRight);
     dryWetL.setTooltip (dryWet.getTooltip());
     dryWetA = std::make_unique<SA> (p.apvts, "drywet", dryWet);
+    for (auto* l : { &logo, &brand }) l->setInterceptsMouseClicks (false, false);   // clicks go to the About area on top
+    logoMark.setInterceptsMouseClicks (false, false);
+    aboutArea.setTooltip ("About FlatQ");
+    aboutArea.onClick = [this] { showAbout(); };
+    menuDots.setTooltip ("Menu: settings and about");
+    menuDots.onClick = [this] { showMenu(); };
+    tooltipWindow.setMillisecondsBeforeTipAppears (FlatQProcessor::getSetting ("tooltips", true) ? 450 : 100000000);
     notices.setVisible (false);
     volumeIcon.setTooltip ("Mute / unmute the output");
     swap.setTooltip ("Swap the left and right input channels");
@@ -868,6 +960,22 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     timerCallback();
 }
 
+void FlatQEditor::showAbout() { showPanel (std::make_unique<AboutPanel>(), aboutArea); }
+
+void FlatQEditor::showSettings()
+{
+    showPanel (std::make_unique<SettingsPanel> ([this] (bool on) { tooltipWindow.setMillisecondsBeforeTipAppears (on ? 450 : 100000000); }), menuDots);
+}
+
+void FlatQEditor::showMenu()
+{
+    juce::PopupMenu m;
+    m.addItem (1, "Settings...");
+    m.addItem (2, "About FlatQ");
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&menuDots).withParentComponent (this),
+                     [this] (int r) { if (r == 1) showSettings(); else if (r == 2) showAbout(); });
+}
+
 void FlatQEditor::updateSearch()
 {
     searching = searchBox.getText().trim().length() >= 2 || selectedBrand.isNotEmpty();
@@ -983,6 +1091,7 @@ void FlatQEditor::refreshStatus()
         trimL.setColour (juce::Label::textColourId, trim.muted || (trim.hasLimit && trim.getValue() >= trim.limit - 0.05) ? juce::Colour (0xffef4444) : theme::text);
     }
     graph.setBassLimit (bass > 20.5f ? bass : 0.f);
+    outMeter.mono = a.getRawParameterValue ("mono")->load() > 0.5f;   // mono output: one bar instead of two
     {   // options that change the sound but are not visible: flag them in the middle of the graph
         auto on = [&a] (const char* id) { return a.getRawParameterValue (id)->load() > 0.5f; };
         auto turnOff = [this] (const char* id) { return [this, id] { if (auto* prm = proc.apvts.getParameter (id)) prm->setValueNotifyingHost (0.f); }; };
@@ -1045,6 +1154,7 @@ void FlatQEditor::resized()
     auto strip = r.removeFromRight (stripW);
 
     auto head64 = side.removeFromTop (64).reduced (16, 0);
+    aboutArea.setBounds (head64);
     logoMark.setBounds (head64.removeFromLeft (36).withSizeKeepingCentre (36, 36));
     head64.removeFromLeft (10);
     logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it (like "from Sonarworks")
@@ -1066,7 +1176,8 @@ void FlatQEditor::resized()
     results.setBounds (side);
 
     auto head = r.removeFromTop (headerH);
-    title.setBounds (head.removeFromTop (44).withTrimmedTop (12).reduced (20, 0));
+    menuDots.setBounds (juce::Rectangle<int> (head.getRight() - 42, head.getY() + 12, 30, 30));   // top right
+    title.setBounds (head.removeFromTop (44).withTrimmedTop (12).withTrimmedRight (48).reduced (20, 0));
     subtitle.setBounds (head.reduced (20, 0).withHeight (20));
 
     auto status = r.removeFromBottom (statusH);

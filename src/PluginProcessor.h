@@ -62,7 +62,10 @@ public:
     bool duplicateProfile (int builtIn, const juce::File& file, juce::String& error);          // builtIn >= 0 or a file
     bool renameProfile (const juce::File& file, const juce::String& newName, juce::String& error);
     bool deleteProfile (const juce::File& file, juce::String& error);
-    static juce::File lastProfileFile();      // remembers the last profile used, for new instances
+    static juce::File lastProfileFile();
+    // Small persisted app settings (Application Support/FlatQ/FlatQ.settings), shared by all instances
+    static bool getSetting (const juce::String& key, bool defaultValue);
+    static void setSetting (const juce::String& key, bool value);      // remembers the last profile used, for new instances
     bool importAutoEq (const juce::File& measurement, const juce::String& targetCsv, const juce::String& targetLabel, juce::String& error);
     // Manual per-frequency trim (advanced): offsets in dB per flatq::manualFreqs() band, per channel, on top of the target.
     // While linked, an edit applies to both channels.

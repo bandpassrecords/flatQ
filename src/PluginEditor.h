@@ -78,6 +78,7 @@ class LevelMeter : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     explicit LevelMeter (std::array<std::atomic<float>, 2>& s) : src (s) {}
+    bool mono = false;   // mono output: both channels are the same, so draw a single bar
     void paint (juce::Graphics&) override;
 private:
     std::array<std::atomic<float>, 2>& src;
@@ -250,6 +251,29 @@ private:
     juce::OwnedArray<juce::TextButton> buttons;
 };
 
+// Transparent clickable area (the logo / wordmark opens the About panel).
+class ClickArea : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    ClickArea() { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+    std::function<void()> onClick;
+    void mouseUp (const juce::MouseEvent& e) override { if (onClick && contains (e.getPosition())) onClick(); }
+};
+
+// Three vertical dots: the menu button at the top right.
+class MenuDots : public juce::Button
+{
+public:
+    MenuDots() : juce::Button ("Menu") {}
+    void paintButton (juce::Graphics& g, bool over, bool) override
+    {
+        auto r = getLocalBounds().toFloat();
+        if (over) { g.setColour (juce::Colour (0xff23272e)); g.fillRoundedRectangle (r, 6.f); }
+        g.setColour (over ? theme::text : theme::dim);
+        for (int i = -1; i <= 1; ++i) g.fillEllipse (r.getCentreX() - 2.f, r.getCentreY() + (float) i * 6.f - 2.f, 4.f, 4.f);
+    }
+};
+
 // Clickable "LABEL / value ^" cell in the bottom status row.
 class StatusItem : public juce::Component, public juce::SettableTooltipClient
 {
@@ -369,6 +393,11 @@ private:
     SwapButton swap;
     juce::Slider dryWet { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxRight };
     juce::Label dryWetL { {}, "Dry / Wet" };
+    ClickArea aboutArea;
+    MenuDots menuDots;
+    void showAbout();
+    void showSettings();
+    void showMenu();
     NoticeStack notices;
     juce::String noticeSig;
     PowerButton bypass;

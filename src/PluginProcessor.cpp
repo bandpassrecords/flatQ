@@ -78,7 +78,7 @@ FlatQProcessor::FlatQProcessor()
     designThread->startThread();
 
     // a fresh instance starts from the last profile used (a host restoring saved state will override this afterwards)
-    juce::String last = lastProfileFile().loadFileAsString().trim(), err;
+    juce::String last = getSetting ("loadLastProfile", true) ? lastProfileFile().loadFileAsString().trim() : juce::String(), err;
     if (last.startsWith ("builtin:"))
     {
         for (int i = 0; i < numBuiltInProfiles(); ++i)
@@ -89,6 +89,28 @@ FlatQProcessor::FlatQProcessor()
         juce::File f (last.fromFirstOccurrenceOf ("file:", false, false));
         if (f.existsAsFile()) loadProfile (f, err);
     }
+}
+
+static juce::PropertiesFile::Options settingsOptions()
+{
+    juce::PropertiesFile::Options o;
+    o.storageFormat = juce::PropertiesFile::storeAsXML;
+    o.millisecondsBeforeSaving = 0;
+    return o;
+}
+
+bool FlatQProcessor::getSetting (const juce::String& key, bool defaultValue)
+{
+    juce::PropertiesFile p (appDataDir().getChildFile ("FlatQ.settings"), settingsOptions());
+    return p.getBoolValue (key, defaultValue);
+}
+
+void FlatQProcessor::setSetting (const juce::String& key, bool value)
+{
+    appDataDir().createDirectory();
+    juce::PropertiesFile p (appDataDir().getChildFile ("FlatQ.settings"), settingsOptions());
+    p.setValue (key, value);
+    p.saveIfNeeded();
 }
 
 juce::File FlatQProcessor::lastProfileFile()
