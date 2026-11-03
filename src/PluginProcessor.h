@@ -12,7 +12,7 @@ struct GraphData
     bool hasCeiling = false, perChannel = false;
     std::array<std::array<float, 31>, 2> bandBase {};   // target at flatq::manualFreqs() per channel, before manual offsets and preamp
     double preampDb = 0, maxErrDb = 0;
-    juce::String name;
+    juce::String name, kind;   // kind: "headphone" or "speaker"
 };
 
 class FlatQProcessor : public juce::AudioProcessor, private juce::AudioProcessorValueTreeState::Listener
@@ -56,6 +56,7 @@ public:
     static juce::File importedProfilesDir();  // same folder as the user library
     // --- user profile library (Application Support/FlatQ/Profiles): list, import, duplicate, rename, delete
     static juce::File userProfilesDir();
+    static juce::String profileKind (const juce::File& file);   // "headphone" or "speaker"
     static juce::Array<juce::File> userProfileFiles();
     juce::String getProfilePath() const { juce::SpinLock::ScopedLockType sl (profileLock); return profilePath; }
     bool importProfileFile (const juce::File& file, juce::String& error);                      // converts to .flatq in the library and loads it
@@ -82,6 +83,7 @@ public:
     GraphData getGraph() const { juce::SpinLock::ScopedLockType sl (graphLock); return graph; }
     int getGraphVersion() const { return graphVersion.load(); }
     juce::AudioProcessorValueTreeState apvts;
+    std::atomic<bool> inClipped { false }, outClipped { false };   // sticky: set when a peak reaches 0 dBFS, cleared by the user (click on the clip light)
     std::array<std::atomic<float>, 2> inPeak { { 0.f, 0.f } }, outPeak { { 0.f, 0.f } };   // linear peak per channel, for the meters
     double getSampleRate_() const { return sampleRateAtomic.load(); }
 

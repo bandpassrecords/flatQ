@@ -56,6 +56,10 @@ struct Profile {
             p->d = t->toFlatq(base);
         } else { if (err) *err = "unsupported file type (use .flatq, .lvls, .lvlsproj or .tmreq)"; return nullptr; }
         if (p->d.name.empty()) p->d.name = base;
+        if (p->d.type.empty()) {   // formats that do not say what they are for: Sonarworks headphone profiles vs speaker projects / room EQ
+            if (ext == ".lvls") p->d.type = "headphone";
+            else if (ext == ".lvlsproj" || ext == ".tmreq") p->d.type = "speaker";
+        }
         if (p->d.hintBassLimitHz < 0 && p->d.hintMaxBoostDb < 0) p->d.suggestHints();
         p->name = p->d.name;
         return p;

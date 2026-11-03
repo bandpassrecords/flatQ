@@ -36,7 +36,7 @@ inline bool parseAutoEqCsv(const std::string& text, CsvCurve& out, std::string* 
 // Correction = target - measurement, both centred at 1 kHz, on a 960-point log grid.
 inline FlatqProfile buildAutoEqProfile(const CsvCurve& m, const CsvCurve& t, const std::string& name, double maxBoostDb = 6.0) {
     const double m1k = interpDb(m.freq, m.db, 1000.0), t1k = interpDb(t.freq, t.db, 1000.0);
-    FlatqProfile p; p.name = name; p.sameBoth = true;
+    FlatqProfile p; p.name = name; p.type = "headphone"; p.sameBoth = true;
     const int n = 960;   // ~96 points/octave: finer than the AutoEq data itself (~70/oct)
     Channel& c = p.ch[0];
     c.freq = logGrid(n, 20.0, 20000.0);
@@ -51,7 +51,7 @@ inline FlatqProfile buildAutoEqProfile(const CsvCurve& m, const CsvCurve& t, con
 
 // A finished AutoEq equalization curve (e.g. its results for crinacle's measurements): used as the correction as it is.
 inline FlatqProfile buildPreEqProfile(const CsvCurve& eq, const std::string& name) {
-    FlatqProfile p; p.name = name; p.sameBoth = true;
+    FlatqProfile p; p.name = name; p.type = "headphone"; p.sameBoth = true;
     p.ch[0].freq = eq.freq; p.ch[0].gain = eq.db;
     p.ch[1] = p.ch[0];
     return p;   // no hints: AutoEq already smoothed and limited it

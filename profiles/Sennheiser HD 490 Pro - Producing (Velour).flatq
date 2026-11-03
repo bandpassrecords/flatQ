@@ -1,6 +1,7 @@
 # FlatQ profile
 flatq 1
 name Sennheiser HD 490 Pro - Producing (Velour)
+type headphone
 channel LR
   curve log 355 20 22000
     8.017838 7.9721 7.890288 7.778504 7.642187 7.48807 7.323781 7.15666 

@@ -340,13 +340,13 @@ void ProfileList::refresh()
     const auto cur = proc.getProfilePath();
     for (auto& f : FlatQProcessor::userProfileFiles())
     {
-        Entry e; e.name = f.getFileNameWithoutExtension(); e.tag = "MY"; e.file = f;
+        Entry e; e.name = f.getFileNameWithoutExtension(); e.tag = "MY"; e.file = f; e.kind = FlatQProcessor::profileKind (f);
         currentFound |= f.getFullPathName() == cur;
         entries.push_back (e);
     }
     if (cur.isNotEmpty() && ! currentFound && juce::File (cur).existsAsFile())   // loaded from somewhere else (e.g. an old session): show it too
     {
-        Entry e; e.name = juce::File (cur).getFileNameWithoutExtension(); e.tag = "EXT"; e.file = juce::File (cur); e.external = true;
+        Entry e; e.name = juce::File (cur).getFileNameWithoutExtension(); e.tag = "EXT"; e.file = juce::File (cur); e.external = true; e.kind = FlatQProcessor::profileKind (e.file);
         entries.insert (entries.begin(), e);
     }
     box.updateContent();
@@ -371,7 +371,8 @@ void ProfileList::paintListBoxItem (int row, juce::Graphics& g, int w, int h, bo
     const auto& e = entries[(size_t) row];
     if (selected) { g.setColour (accent.withAlpha (0.14f)); g.fillRect (0, 0, w, h); g.setColour (accent); g.fillRect (0, 0, 3, h); }
     g.setColour (selected ? text : text.withAlpha (0.85f)); g.setFont (juce::FontOptions (12.5f));
-    g.drawFittedText (e.name, 16, 2, w - 94, h - 4, juce::Justification::centredLeft, 2, 0.9f);
+    drawKindIcon (g, juce::Rectangle<float> (14.f, ((float) h - 22.f) / 2.f, 22.f, 22.f), e.kind, selected ? accent : dim);
+    g.drawFittedText (e.name, 46, 2, w - 124, h - 4, juce::Justification::centredLeft, 2, 0.9f);
 
     juce::Colour c = result;
     if (e.tag == "FLQ") c = accent; else if (e.tag == "LVL") c = good; else if (e.tag == "RME") c = chanR; else if (e.tag == "MY") c = juce::Colour (0xfffbbf24);
@@ -977,7 +978,7 @@ void AddProfileScreen::paint (juce::Graphics& g)
 FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
     setLookAndFeel (&laf);
-    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &addButton, &title, &subtitle, &logoMark, &logo, &brand, &inL, &outL, &trimL,
+    for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &addButton, &title, &subtitle, &kindIcon, &inClip, &outClip, &logoMark, &logo, &brand, &inL, &outL, &trimL,
                                                               &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &sidebarBtn, &mono, &skipExport, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
@@ -1106,6 +1107,10 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     preamp.setTooltip ("Overall gain applied so the EQ never boosts above 0 dB (auto preamp). Click for options.");
     manual.setTooltip ("Advanced: shows the current equalization per third-octave band and lets you change each one, for left and right if you want. Click to open.");
     graph.setTooltip ("Frequency response. Target = the flat line we aim for. Measured = the inverse of the profile (what the speaker or headphone actually does). EQ = the filter applied, which does the opposite of Measured (drawn from 0 dB: the preamp is in the output fader). Result = Measured + EQ, so it should sit on the flat Target. Dashed = boost limit. Click the legend to show/hide curves; drag the left handle to set the bass limit.");
+    inClip.setTooltip ("Clipping indicator for the input: lights up when the signal reaches 0 dBFS and stays lit. Click to reset.");
+    outClip.setTooltip ("Clipping indicator for the output: lights up when the signal reaches 0 dBFS and stays lit. Click to reset.");
+    inClip.onReset  = [this] { proc.inClipped = false; inClip.setClipped (false); };
+    outClip.onReset = [this] { proc.outClipped = false; outClip.setClipped (false); };
     inMeter.setTooltip ("Input level (peak, L / R)");
     outMeter.setTooltip ("Output level (peak, L / R), after the EQ and trim");
     title.setTooltip ("Current profile");
@@ -1241,6 +1246,7 @@ void FlatQEditor::refreshStatus()
 void FlatQEditor::timerCallback()
 {
     inMeter.repaint(); outMeter.repaint();
+    inClip.setClipped (proc.inClipped.load()); outClip.setClipped (proc.outClipped.load());
     const int v = proc.getGraphVersion();
     if (v != lastVersion)
     {
@@ -1253,6 +1259,7 @@ void FlatQEditor::timerCallback()
         subtitle.setText (d.freqs.empty() ? "" : juce::String::formatted ("%s   |   preamp %.1f dB   |   max fit error %.1f dB",
                           d.perChannel ? "Independent L/R" : "Same on both channels", d.preampDb, d.maxErrDb), juce::dontSendNotification);
         lastPreamp = d.preampDb;
+        kindIcon.setKind (d.freqs.empty() ? juce::String() : d.kind);
         graph.setData (std::move (d));
     }
     refreshStatus();
@@ -1293,8 +1300,11 @@ void FlatQEditor::resized()
     auto head = r.removeFromTop (headerH);
     menuDots.setBounds (juce::Rectangle<int> (head.getRight() - 42, head.getY() + 12, 30, 30));   // top right
     sidebarBtn.setBounds (menuDots.getBounds().translated (-36, 0));                               // hide / show the left bar, left of the dots
-    title.setBounds (head.removeFromTop (44).withTrimmedTop (12).withTrimmedRight (88).reduced (20, 0));
-    subtitle.setBounds (head.reduced (20, 0).withHeight (20));
+    auto titleRow = head.removeFromTop (44).withTrimmedTop (12).withTrimmedRight (88).reduced (20, 0);
+    kindIcon.setBounds (titleRow.removeFromLeft (28).withSizeKeepingCentre (26, 26));   // headphone / speaker, left of the loaded profile
+    titleRow.removeFromLeft (10);
+    title.setBounds (titleRow);
+    subtitle.setBounds (head.reduced (20, 0).withHeight (20).withTrimmedLeft (38));
 
     auto status = r.removeFromBottom (statusH);
     StatusItem* items[] = { &latency, &filter, &length, &smoothing, &limits, &preamp, &manual };
@@ -1318,7 +1328,8 @@ void FlatQEditor::resized()
     inL.setBounds (inCol.withY (labels.getY()).withHeight (22).expanded (6, 0));
     outL.setBounds (outCol.withY (labels.getY()).withHeight (22).expanded (6, 0));
     trimL.setBounds (cols.withY (labels.getY()).withHeight (22).expanded (14, 0));   // output level at the top of the fader
-    inMeter.setBounds (inCol); outMeter.setBounds (outCol);
+    inClip.setBounds (inCol.withHeight (14)); outClip.setBounds (outCol.withHeight (14));   // clip lights above the meters
+    inMeter.setBounds (inCol.withTrimmedTop (19)); outMeter.setBounds (outCol.withTrimmedTop (19));
     trim.setBounds (cols);
     auto iconBox = [&icons] (juce::Rectangle<int> col) { return col.withY (icons.getY()).withHeight (icons.getHeight()).withSizeKeepingCentre (34, 28); };
     swap.setBounds (iconBox (inCol));          // under In

@@ -19,6 +19,38 @@ namespace theme
     const juce::Colour chanR    { 0xfff4a259 };
 }
 
+// Headphone / speaker glyphs (the profile type), drawn in a square.
+inline void drawKindIcon (juce::Graphics& g, juce::Rectangle<float> r, const juce::String& kind, juce::Colour c)
+{
+    const float s = juce::jmin (r.getWidth(), r.getHeight());
+    const auto m = r.getCentre();
+    g.setColour (c);
+    if (kind == "speaker")   // studio monitor: cabinet, tweeter, woofer
+    {
+        g.drawRoundedRectangle (m.x - 0.26f * s, m.y - 0.42f * s, 0.52f * s, 0.84f * s, 0.07f * s, 1.5f);
+        g.fillEllipse (m.x - 0.065f * s, m.y - 0.27f * s, 0.13f * s, 0.13f * s);
+        g.drawEllipse (m.x - 0.15f * s, m.y - 0.03f * s, 0.30f * s, 0.30f * s, 1.5f);
+    }
+    else                      // headphones: band over two ear cups
+    {
+        juce::Path band;
+        band.addCentredArc (m.x, m.y + 0.06f * s, 0.34f * s, 0.34f * s, 0.f, -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi, true);
+        g.strokePath (band, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.fillRoundedRectangle (m.x - 0.34f * s - 0.075f * s, m.y + 0.04f * s, 0.15f * s, 0.30f * s, 0.05f * s);
+        g.fillRoundedRectangle (m.x + 0.34f * s - 0.075f * s, m.y + 0.04f * s, 0.15f * s, 0.30f * s, 0.05f * s);
+    }
+}
+
+// The icon next to the loaded profile's name in the header.
+class KindIcon : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    void setKind (const juce::String& k) { if (k != kind) { kind = k; setTooltip (k == "speaker" ? "Speaker profile" : k.isEmpty() ? juce::String() : "Headphone profile"); repaint(); } }
+    void paint (juce::Graphics& g) override { if (kind.isNotEmpty()) drawKindIcon (g, getLocalBounds().toFloat(), kind, theme::accent); }
+private:
+    juce::String kind;
+};
+
 // The FlatQ mark: an EQ curve whose ripples die out into the flat line (same drawing as assets/logo.svg).
 class LogoMark : public juce::Component
 {
@@ -293,6 +325,26 @@ public:
     }
 };
 
+// Clipping indicator above a level meter: lights up (red) once the signal has reached 0 dBFS and stays lit until clicked.
+class ClipLight : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    std::function<void()> onReset;
+    void setClipped (bool c) { if (c != clipped) { clipped = c; repaint(); } }
+    void paint (juce::Graphics& g) override
+    {
+        auto r = getLocalBounds().toFloat().reduced (0.5f);
+        g.setColour (clipped ? juce::Colour (0xffef4444) : juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 3.f);
+        g.setColour (clipped ? juce::Colour (0xffef4444) : theme::divider); g.drawRoundedRectangle (r, 3.f, 1.f);
+        g.setColour (clipped ? juce::Colours::white : theme::dim.withAlpha (0.6f)); g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
+        g.drawText ("CLIP", getLocalBounds(), juce::Justification::centred);
+    }
+    void mouseUp (const juce::MouseEvent& e) override { if (contains (e.getPosition()) && onReset) onReset(); }
+    void mouseEnter (const juce::MouseEvent&) override { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+private:
+    bool clipped = false;
+};
+
 // Clickable "LABEL / value ^" cell in the bottom status row.
 class StatusItem : public juce::Component, public juce::SettableTooltipClient
 {
@@ -326,7 +378,7 @@ public:
     }
     void syncSelection();    // highlight the loaded profile (no disk access)
 private:
-    struct Entry { juce::String name, tag; int builtIn = -1; juce::File file; bool external = false; };
+    struct Entry { juce::String name, tag, kind; int builtIn = -1; juce::File file; bool external = false; };
     void paintListBoxItem (int row, juce::Graphics&, int w, int h, bool selected) override;
     void listBoxItemClicked (int row, const juce::MouseEvent&) override;
     void selectedRowsChanged (int) override {}
@@ -446,6 +498,8 @@ private:
     void openAddScreen() { addScreen.open(); }
     juce::Label title, subtitle, logo { {}, "FlatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL, brand { {}, "BandPass Records" };
     LogoMark logoMark;
+    KindIcon kindIcon;
+    ClipLight inClip, outClip;
     LevelMeter inMeter { proc.inPeak }, outMeter { proc.outPeak };
     OutputFader trim;
     SpeakerButton volumeIcon;

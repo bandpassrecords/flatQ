@@ -216,6 +216,12 @@ juce::File FlatQProcessor::appDataDir()
     return d.getChildFile ("FlatQ");
 }
 
+juce::String FlatQProcessor::profileKind (const juce::File& file)
+{
+    auto p = flatq::Profile::load (file.getFullPathName().toStdString());
+    return p ? juce::String (p->d.kind()) : juce::String ("headphone");
+}
+
 juce::File FlatQProcessor::userProfilesDir() { return appDataDir().getChildFile ("Profiles"); }
 juce::File FlatQProcessor::importedProfilesDir() { return userProfilesDir(); }
 
@@ -423,6 +429,7 @@ void FlatQProcessor::redesign()
     auto src = [nEff] (int c) { return juce::jmin (c, nEff - 1); };
 
     g.name = juce::String (p->name);
+    g.kind = juce::String (p->d.kind());
     g.hasCeiling = opt.clampToMaxBoost;
     g.perChannel = nEff > 1;
     g.preampDb = pre;
@@ -537,17 +544,18 @@ void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const bool skipForExport = apvts.getRawParameterValue ("bypassexport")->load() > 0.5f && isNonRealtime();
     if (nch == 2 && ! skipForExport && apvts.getRawParameterValue ("swap")->load() > 0.5f)   // input L/R swap
         std::swap_ranges (buffer.getWritePointer (0), buffer.getWritePointer (0) + n, buffer.getWritePointer (1));
-    auto peakOf = [&] (std::array<std::atomic<float>, 2>& m)
+    auto peakOf = [&] (std::array<std::atomic<float>, 2>& m, std::atomic<bool>& clipFlag)
     {
         for (int c = 0; c < nch; ++c)
         {
             const float pk = buffer.getMagnitude (c, 0, n);
+            if (pk >= 0.9999f) clipFlag = true;
             const float old = m[(size_t) c].load();
             m[(size_t) c] = pk > old ? pk : old * 0.92f;   // instant attack, smooth release (per block)
         }
     };
-    peakOf (inPeak);
-    struct OutMeter { std::function<void()> f; ~OutMeter() { f(); } } outMeter { [&] { applyMute (buffer); peakOf (outPeak); } };
+    peakOf (inPeak, inClipped);
+    struct OutMeter { std::function<void()> f; ~OutMeter() { f(); } } outMeter { [&] { applyMute (buffer); peakOf (outPeak, outClipped); } };
     if (manualBypass || skipForExport) { processDry (buffer); return; }
     const int mode = (int) apvts.getRawParameterValue ("mode")->load();
 

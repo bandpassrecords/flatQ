@@ -2,6 +2,7 @@
 //
 //   flatq 1
 //   name Focal Speakers - Flat
+//   type headphone                 # optional: headphone | speaker (shown as an icon); inferred when missing
 //   channel L                      # L, R, or LR (same response on both channels)
 //     delay_ms 0.068               # optional
 //     gain_db 0.1                  # optional channel gain
@@ -80,6 +81,7 @@ struct Channel {
 
 struct FlatqProfile {
     std::string name;
+    std::string type;                        // "headphone" or "speaker"; empty = not stored (see kind())
     std::array<Channel, 2> ch;
     bool sameBoth = true;                    // true: ch[0] applies to both channels
     std::vector<double> ceilFreq, ceilGain;  // optional boost ceiling
@@ -87,6 +89,14 @@ struct FlatqProfile {
     std::vector<std::string> warnings;
 
     int channels() const { return sameBoth ? 1 : 2; }
+
+    // What the profile is for. Stored when known; otherwise guessed: a profile with a different response or delay per
+    // channel is a speaker (room / driver alignment), a single shared response is a headphone.
+    std::string kind() const {
+        if (type == "headphone" || type == "speaker") return type;
+        if (!sameBoth || ch[0].delayMs != 0 || ch[1].delayMs != 0) return "speaker";
+        return "headphone";
+    }
 
     // Suggests settings from the curve itself (used for imports that carry no recommendation). If the correction asks for
     // a big boost at the bottom of the spectrum, the device is rolling off there and boosting cannot restore the output:
@@ -141,6 +151,7 @@ struct FlatqProfile {
             if (kw == "flatq") { int v = 0; ls >> v; if (v != 1) return fail("unsupported flatq version", ln); header = true; }
             else if (!header) return fail("missing 'flatq 1' header", ln);
             else if (kw == "name") { std::getline(ls, p.name); p.name.erase(0, p.name.find_first_not_of(" \t")); }
+            else if (kw == "type") { ls >> p.type; }
             else if (kw == "channel") {
                 std::string c; ls >> c;
                 if (c == "LR") { cur = &p.ch[0]; p.sameBoth = true; }
@@ -166,6 +177,7 @@ struct FlatqProfile {
 
     std::string serialize() const {
         std::string o = "# FlatQ profile\nflatq 1\nname " + name + "\n";
+        if (!type.empty()) o += "type " + type + "\n";
         if (hintMaxBoostDb >= 0) o += "hint max_boost_db " + std::to_string(hintMaxBoostDb) + "\n";
         if (hintBassLimitHz >= 0) o += "hint bass_limit_hz " + std::to_string(hintBassLimitHz) + "\n";
         if (hintSmoothOct >= 0) o += "hint smooth_oct " + std::to_string(hintSmoothOct) + "\n";
