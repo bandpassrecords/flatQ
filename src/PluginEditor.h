@@ -387,9 +387,15 @@ private:
     void timerCallback() override;
     void refreshStatus();
     // A click on a status item while its popup is open dismisses the popup (on mouse-down); the matching mouse-up must not reopen it.
-    void markClosed (StatusItem& it) { closedItem = &it; closedMs = juce::Time::getMillisecondCounter(); }
+    void markClosed (juce::Component& it) { closedItem = &it; closedMs = juce::Time::getMillisecondCounter(); }
+    bool consumeJustClosed (juce::Component& it)   // true if this click is the one that just dismissed the popup of `it`
+    {
+        const bool was = closedItem == &it && juce::Time::getMillisecondCounter() - closedMs < 400;
+        closedItem = nullptr;
+        return was;
+    }
     void componentBeingDeleted (juce::Component&) override { if (calloutItem) markClosed (*calloutItem); calloutItem = nullptr; }
-    StatusItem *closedItem = nullptr, *calloutItem = nullptr;
+    juce::Component *closedItem = nullptr, *calloutItem = nullptr;
     juce::uint32 closedMs = 0;
     juce::Component::SafePointer<juce::CallOutBox> callout;
     void showFilterMenu();

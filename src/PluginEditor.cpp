@@ -816,7 +816,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     for (auto* l : { &logo, &brand }) l->setInterceptsMouseClicks (false, false);   // clicks go to the About area on top
     logoMark.setInterceptsMouseClicks (false, false);
     aboutArea.setTooltip ("About FlatQ");
-    aboutArea.onClick = [this] { showAbout(); };
+    aboutArea.onClick = [this] { if (! consumeJustClosed (aboutArea)) showAbout(); };   // a second click closes it instead of reopening
     sidebarVisible = FlatQProcessor::getSetting ("sidebarVisible", true);
     sidebarBtn.barVisible = sidebarVisible;
     sidebarBtn.setTooltip ("Hide or show the left bar");
@@ -828,7 +828,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         applySidebarVisibility();
     };
     menuDots.setTooltip ("Menu: settings and about");
-    menuDots.onClick = [this] { showMenu(); };
+    menuDots.onClick = [this] { if (! consumeJustClosed (menuDots)) showMenu(); };
     tooltipWindow.setMillisecondsBeforeTipAppears (FlatQProcessor::getSetting ("tooltips", true) ? 450 : 100000000);
     notices.setVisible (false);
     volumeIcon.setTooltip ("Mute / unmute the output");
@@ -973,7 +973,7 @@ void FlatQEditor::showMenu()
     m.addItem (1, "Settings...");
     m.addItem (2, "About FlatQ");
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&menuDots).withParentComponent (this),
-                     [this] (int r) { if (r == 1) showSettings(); else if (r == 2) showAbout(); });
+                     [this] (int r) { markClosed (menuDots); if (r == 1) showSettings(); else if (r == 2) showAbout(); });
 }
 
 void FlatQEditor::applySidebarVisibility()
@@ -1019,7 +1019,7 @@ void FlatQEditor::showPanel (std::unique_ptr<juce::Component> c, juce::Component
 {
     c->setLookAndFeel (&laf);   // the call-out is a separate window: it would otherwise fall back to the default look
     auto& box = juce::CallOutBox::launchAsynchronously (std::move (c), from.getScreenBounds(), nullptr);
-    callout = &box; calloutItem = dynamic_cast<StatusItem*> (&from);
+    callout = &box; calloutItem = &from;
     box.addComponentListener (this);
 }
 
