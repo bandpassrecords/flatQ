@@ -79,12 +79,7 @@ FlatQProcessor::FlatQProcessor()
 
     // a fresh instance starts from the last profile used (a host restoring saved state will override this afterwards)
     juce::String last = getSetting ("loadLastProfile", true) ? lastProfileFile().loadFileAsString().trim() : juce::String(), err;
-    if (last.startsWith ("builtin:"))
-    {
-        for (int i = 0; i < numBuiltInProfiles(); ++i)
-            if (builtInProfileName (i) == last.fromFirstOccurrenceOf ("builtin:", false, false)) { loadBuiltInProfile (i, err); break; }
-    }
-    else if (last.startsWith ("file:"))
+    if (last.startsWith ("file:"))
     {
         juce::File f (last.fromFirstOccurrenceOf ("file:", false, false));
         if (f.existsAsFile()) loadProfile (f, err);
@@ -258,6 +253,19 @@ bool FlatQProcessor::importProfileFile (const juce::File& file, juce::String& er
     return loadProfile (out, error);
 }
 
+bool FlatQProcessor::addBuiltInToLibrary (int builtIn, juce::String& error, bool applyHints)
+{
+    if (builtIn < 0 || builtIn >= numBuiltInProfiles()) { error = "no such built-in profile"; return false; }
+    int size = 0; const char* res = BinaryData::namedResourceList[builtIn];
+    const char* data = BinaryData::getNamedResource (res, size);
+    std::string err;
+    auto p = flatq::Profile::loadFromMemory (data, (size_t) size, BinaryData::getNamedResourceOriginalFilename (res), &err);
+    if (! p) { error = err; return false; }
+    juce::File out;
+    if (! saveToLibrary (p->d, juce::String (p->name), true, out, error)) return false;
+    return loadProfile (out, error, applyHints);
+}
+
 bool FlatQProcessor::duplicateProfile (int builtIn, const juce::File& file, juce::String& error)
 {
     std::shared_ptr<const flatq::Profile> p;
@@ -294,11 +302,8 @@ bool FlatQProcessor::deleteProfile (const juce::File& file, juce::String& error)
 {
     const bool wasCurrent = getProfilePath() == file.getFullPathName();
     if (! file.moveToTrash() && ! file.deleteFile()) { error = "cannot delete " + file.getFullPathName(); return false; }
-    if (wasCurrent)   // don't keep a profile loaded whose file is gone: fall back to the next one in the library, else the first built-in
-    {
+    if (wasCurrent)   // don't keep a profile loaded whose file is gone: fall back to the next one in the library, if any
         for (auto& f : userProfileFiles()) if (loadProfile (f, error)) return true;
-        return numBuiltInProfiles() > 0 ? loadBuiltInProfile (0, error) : true;
-    }
     return true;
 }
 
@@ -326,8 +331,11 @@ bool FlatQProcessor::importMeasurement (int measurementIndex, int targetIndex, j
 {
     auto& db = MeasurementDb::get();
     flatq::CsvCurve m, t;
+    if (db.available() && measurementIndex >= 0 && measurementIndex < db.size() && db.entry (measurementIndex).builtIn >= 0)
+        return addBuiltInToLibrary (db.entry (measurementIndex).builtIn, error);
     if (! db.available() || ! db.curve (measurementIndex, m)) { error = "measurement data not available"; return false; }
     const auto& e = db.entry (measurementIndex);
+    if (e.builtIn >= 0) return addBuiltInToLibrary (e.builtIn, error);   // an embedded profile offered in the search
     if (e.preEq)   // AutoEq's finished equalization (no raw measurement exists): the curve is the correction
     {
         const auto label = e.name + " (" + e.source + " - AutoEq EQ)";
@@ -637,10 +645,13 @@ void FlatQProcessor::setStateInformation (const void* data, int size)
         apvts.replaceState (tree);
         juce::String err;
         const auto builtIn = tree.getProperty ("builtIn").toString();   // looked up by name so reordering is safe
-        if (builtIn.isNotEmpty())
+        if (builtIn.isNotEmpty())   // sessions from before the library: the embedded profile goes into the library; a profile that is no longer embedded is looked up there
         {
-            for (int i = 0; i < numBuiltInProfiles(); ++i)
-                if (builtInProfileName (i) == builtIn) { loadBuiltInProfile (i, err, false); break; }
+            bool done = false;
+            for (int i = 0; i < numBuiltInProfiles() && ! done; ++i)
+                if (builtInProfileName (i) == builtIn) done = addBuiltInToLibrary (i, err, false);
+            auto lib = userProfilesDir().getChildFile (juce::File::createLegalFileName (builtIn) + ".flatq");
+            if (! done && lib.existsAsFile()) loadProfile (lib, err, false);
         }
         else
         {

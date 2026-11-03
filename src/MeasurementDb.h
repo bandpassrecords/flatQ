@@ -5,6 +5,7 @@
 #include "AutoEqImport.h"
 #include <juce_core/juce_core.h>
 #include <map>
+#include <BinaryData.h>
 #if FLATQ_HAS_MEASUREMENTS
  #include <MeasurementData.h>
 #endif
@@ -12,7 +13,7 @@
 class MeasurementDb
 {
 public:
-    struct Entry { juce::String source, form, rig, brand, name, model, haystack; bool preEq = false; };   // preEq: an AutoEq result, not a raw measurement
+    struct Entry { juce::String source, form, rig, brand, name, model, haystack; bool preEq = false; int builtIn = -1; };   // builtIn >= 0: an embedded profile (index into BinaryData)   // preEq: an AutoEq result, not a raw measurement
 
     static MeasurementDb& get() { static MeasurementDb db; return db; }
     bool available() const { return ! entries.empty(); }
@@ -70,9 +71,9 @@ private:
 
     static int rank (const juce::String& source)   // lower = more trusted when several sources measured the same model
     {
-        static const char* order[] = { "oratory1990", "Innerfidelity", "Rtings", "Headphone.com Legacy", "Super Review", "HypetheSonics" };
-        for (int i = 0; i < 6; ++i) if (source == order[i]) return i;
-        return 6;
+        static const char* order[] = { "Sonarworks profile", "oratory1990", "Innerfidelity", "Rtings", "Headphone.com Legacy", "Super Review", "HypetheSonics" };
+        for (int i = 0; i < 7; ++i) if (source == order[i]) return i;
+        return 7;
     }
 
     MeasurementDb()
@@ -87,11 +88,20 @@ private:
             e.haystack = (e.name + " " + e.brand + " " + e.source + " " + e.rig).toLowerCase();
             entries.push_back (std::move (e));
         }
+       #endif
+        // the profiles embedded in the plugin are offered here too, instead of being listed by default
+        for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
+        {
+            const auto name = juce::File (BinaryData::getNamedResourceOriginalFilename (BinaryData::namedResourceList[i])).getFileNameWithoutExtension();
+            Entry e { "Sonarworks profile", "over-ear", "", name.upToFirstOccurrenceOf (" ", false, false), name, name.fromFirstOccurrenceOf (" ", false, false), {}, true, i };
+            e.haystack = (e.name + " " + e.brand + " " + e.source).toLowerCase();
+            entries.push_back (std::move (e));
+        }
         std::map<juce::String, int> counts;
         for (auto& e : entries) if (e.brand.isNotEmpty()) ++counts[e.brand];
+        brandList.clear();
         for (auto& kv : counts) brandList.push_back ({ kv.first, kv.second });
         std::sort (brandList.begin(), brandList.end(), [] (const Brand& a, const Brand& b) { return a.name.compareIgnoreCase (b.name) < 0; });
-       #endif
     }
 
     void loadCurves()

@@ -331,13 +331,6 @@ ProfileList::ProfileList (FlatQProcessor& p) : proc (p)
 void ProfileList::refresh()
 {
     entries.clear();
-    for (int i = 0; i < FlatQProcessor::numBuiltInProfiles(); ++i)
-    {
-        Entry e; e.name = FlatQProcessor::builtInProfileName (i); e.builtIn = i;
-        const auto kind = FlatQProcessor::builtInProfileKind (i);
-        e.tag = kind == "FLATQ" ? "FLQ" : kind.startsWith ("LVLS") ? "LVL" : kind == "TMREQ" ? "RME" : kind;
-        entries.push_back (e);
-    }
     bool currentFound = false;
     const auto cur = proc.getProfilePath();
     for (auto& f : FlatQProcessor::userProfileFiles())
@@ -401,7 +394,7 @@ void ProfileList::listBoxItemClicked (int row, const juce::MouseEvent& e)
     if (e.mods.isPopupMenu() || e.x >= getWidth() - 30) { showMenu (row, e.getScreenPosition()); return; }
     const auto& en = entries[(size_t) row];
     juce::String err;
-    const bool ok = en.builtIn >= 0 ? proc.loadBuiltInProfile (en.builtIn, err) : proc.loadProfile (en.file, err);
+    const bool ok = proc.loadProfile (en.file, err);
     if (! ok) report (false, err);
     syncSelection();
 }
@@ -664,11 +657,6 @@ namespace
             title.setFont (juce::FontOptions (26.f, juce::Font::bold)); title.setText ("FlatQ", juce::dontSendNotification);
             sub.setText ("by BandPass Records  -  version " + juce::String (JucePlugin_VersionString), juce::dontSendNotification);
             sub.setColour (juce::Label::textColourId, theme::dim);
-            body.setText ("Corrects your headphones or monitors toward a flat response.\n\n"
-                          "Load a Sonarworks, RME TotalMix or FlatQ profile, or search the AutoEq measurement database and build a profile "
-                          "from any measurement and target. Use it as a minimum-phase or linear-phase FIR, or as a low-latency IIR.",
-                          juce::dontSendNotification);
-            body.setFont (juce::FontOptions (13.f)); body.setJustificationType (juce::Justification::topLeft);
             credits.setText ("Built with JUCE. Equalization method and measurement data from AutoEq (MIT) and the original measurement "
                              "authors; the measurements are for personal use only.", juce::dontSendNotification);
             credits.setFont (juce::FontOptions (11.f)); credits.setColour (juce::Label::textColourId, theme::dim);
@@ -677,8 +665,8 @@ namespace
             link.setURL (juce::URL ("https://flatq.bandpassrecords.com"));
             link.setFont (juce::FontOptions (13.f), false);
             link.setColour (juce::HyperlinkButton::textColourId, theme::accent);
-            for (auto* c : std::initializer_list<juce::Component*> { &title, &sub, &body, &credits, &link }) addAndMakeVisible (c);
-            setSize (420, 290);
+            for (auto* c : std::initializer_list<juce::Component*> { &title, &sub, &credits, &link }) addAndMakeVisible (c);
+            setSize (420, 190);
         }
         void paint (juce::Graphics& g) override { g.fillAll (theme::panel); }
         void resized() override
@@ -687,15 +675,14 @@ namespace
             auto top = r.removeFromTop (56);
             mark.setBounds (top.removeFromLeft (56).withSizeKeepingCentre (52, 52)); top.removeFromLeft (14);
             title.setBounds (top.removeFromTop (32)); sub.setBounds (top);
-            r.removeFromTop (10);
-            body.setBounds (r.removeFromTop (100));
+            r.removeFromTop (14);
             link.setBounds (r.removeFromTop (24).withWidth (200));
             r.removeFromTop (6);
             credits.setBounds (r);
         }
     private:
         LogoMark mark;
-        juce::Label title, sub, body, credits;
+        juce::Label title, sub, credits;
         juce::HyperlinkButton link;
     };
 
@@ -952,11 +939,6 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     setResizable (true, true);
     setResizeLimits (860, 520, 1600, 1000);
     setSize (1220, 660);   // a little wider than before: more room for the graph
-    if (proc.getGraph().freqs.empty() && proc.getBuiltInIndex() < 0 && FlatQProcessor::numBuiltInProfiles() > 0)
-    {
-        juce::String err;
-        proc.loadBuiltInProfile (0, err);   // fresh instance: start with the first bundled profile instead of an empty graph
-    }
     startTimerHz (30);
     timerCallback();
 }

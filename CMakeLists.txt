@@ -23,7 +23,7 @@ juce_add_plugin(FlatQ
     COPY_PLUGIN_AFTER_BUILD FALSE)   # no install step; unsigned/ad-hoc builds are fine for personal use
 
 # Built-in profiles: everything in profiles/ is embedded in the plugin (BinaryData.h)
-file(GLOB_RECURSE FLATQ_BUILTIN CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/profiles/*.flatq")   # profiles/local/ is git-ignored (personal)
+file(GLOB FLATQ_BUILTIN CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/profiles/*.flatq")   # profiles/local/ (personal, git-ignored) is NOT embedded; the embedded ones are only offered in the search
 juce_add_binary_data(FlatQProfiles SOURCES ${FLATQ_BUILTIN})
 # AutoEq targets (MIT, see targets/LICENSE-AutoEq.txt) for the measurement import
 file(GLOB FLATQ_TARGETS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/targets/*.csv")

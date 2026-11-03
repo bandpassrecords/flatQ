@@ -59,6 +59,7 @@ public:
     static juce::Array<juce::File> userProfileFiles();
     juce::String getProfilePath() const { juce::SpinLock::ScopedLockType sl (profileLock); return profilePath; }
     bool importProfileFile (const juce::File& file, juce::String& error);                      // converts to .flatq in the library and loads it
+    bool addBuiltInToLibrary (int builtIn, juce::String& error, bool applyHints = true);      // copies an embedded profile into the library and loads it
     bool duplicateProfile (int builtIn, const juce::File& file, juce::String& error);          // builtIn >= 0 or a file
     bool renameProfile (const juce::File& file, const juce::String& newName, juce::String& error);
     bool deleteProfile (const juce::File& file, juce::String& error);
