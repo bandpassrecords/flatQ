@@ -52,5 +52,12 @@ int main(int argc, char** argv) {
         std::printf("manual trim: +6 dB at 1 kHz -> %+.2f dB there, %.2f dB at 100 Hz\n", d, far);
         if (std::abs(d - 6.0) > 1e-6 || far > 1e-6) ++bad;
     }
+    if (argc > 1) {   // bass limit: no boost below the limit, whatever the correction asks for
+        auto p = Profile::load(argv[1]); DesignOptions o; o.bassLimitHz = 50;
+        double worst = -1e9, rawMax = -1e9;
+        for (double f = 20; f < 50; f *= 1.03) { worst = std::max(worst, targetDb(*p, 0, f, o)); rawMax = std::max(rawMax, p->correctionDb(0, f)); }
+        std::printf("bass limit 50 Hz: max target below it %+.2f dB (raw correction up to %+.1f dB)\n", worst, rawMax);
+        if (rawMax > 1 && worst > 1e-6) ++bad;
+    }
     return bad ? 1 : 0;
 }

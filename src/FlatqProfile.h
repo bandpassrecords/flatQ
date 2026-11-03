@@ -100,8 +100,9 @@ struct FlatqProfile {
 
     // Suggests settings from the curve itself (used for imports that carry no recommendation). If the correction asks for
     // a big boost at the bottom of the spectrum, the device is rolling off there and boosting cannot restore the output:
-    // it only costs headroom (the preamp follows the peak boost) and risks the drivers. The bass limit goes where the
-    // correction first exceeds +6 dB (coming down from 200 Hz), rounded up to 5 Hz, and the max boost is 6 dB.
+    // it only costs headroom (the preamp follows the peak boost) and risks the drivers. The bass limit (below it no boost is
+    // applied) goes where the correction first exceeds +6 dB (coming down from 200 Hz), rounded up to 5 Hz, and the max boost
+    // is 6 dB.
     // Nothing is suggested when the correction at 20 Hz stays within +12 dB.
     void suggestHints() {
         double knee = 0, at20 = -1e9;

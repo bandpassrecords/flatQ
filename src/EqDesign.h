@@ -43,7 +43,7 @@ struct DesignOptions {
     double maxBoostDb      = 12.0;   // global boost limit (dB), applies to every profile
     double smoothingOct    = 0.0;    // fractional-octave smoothing width of the target (0 = off, 1/3 = third-octave)
     double trebleSmoothOct = 0.0;    // width used above ~6 kHz (blended in from ~1.5 kHz); 0 = same as smoothingOct
-    double bassLimitHz     = 0.0;    // 0 = off. Correction fades out between bassLimitHz/2 and bassLimitHz and is 0 dB below
+    double bassLimitHz     = 0.0;    // 0 = off. Boosts are cancelled below this frequency (cuts still apply); the allowed boost rises back to the max boost by 1.4x this frequency
     double maxSlopeDbOct   = 0.0;    // 0 = off. Boosts may not rise faster than this (dB/octave); see limitSlope()
     double trebleGain      = 1.0;    // scales the correction above ~8 kHz (blended in from ~4 kHz); 1 = untouched
     bool   autoPreamp      = true;   // lower overall gain so the EQ never boosts above 0 dB
@@ -65,9 +65,12 @@ inline double logBlend(double f, double f0, double f1) {
 // Correction before smoothing/limits: profile response with the bass fade-out and treble gain applied.
 inline double rawTargetDb(const Profile& p, int ch, double f, const DesignOptions& o) {
     double g = p.correctionDb(ch, f);
-    if (o.bassLimitHz > 0 && f < o.bassLimitHz) {
-        double t = std::clamp(std::log2(f / (o.bassLimitHz * 0.5)), 0.0, 1.0);     // 0 at limit/2 ... 1 at limit
-        g *= 0.5 - 0.5 * std::cos(M_PI * t);                                         // raised-cosine fade
+    if (o.bassLimitHz > 0 && g > 0 && f < o.bassLimitHz * 1.4) {
+        // A speaker that rolls off cannot be boosted back (the correction asks for +40 dB at 20 Hz): below the limit no boost is
+        // allowed at all; between the limit and 1.4x it rises smoothly to the maximum boost, so the curve has no corner.
+        const double t = std::clamp(std::log2(f / o.bassLimitHz) / std::log2(1.4), 0.0, 1.0);
+        const double allowed = (o.clampToMaxBoost ? o.maxBoostDb : 12.0) * (0.5 - 0.5 * std::cos(M_PI * t));
+        g = std::min(g, allowed);
     }
     if (o.trebleGain != 1.0) g *= 1.0 + (o.trebleGain - 1.0) * logBlend(f, 4000.0, 8000.0);
     return g;

@@ -209,10 +209,10 @@ void ResponseGraph::paint (juce::Graphics& g)
         const float hx = xOf (bassLimit > 0 ? bassLimit : 20.f);
         if (bassLimit > 0)
         {
-            const float fx = xOf (juce::jmax (20.f, bassLimit * 0.5f));
-            g.setColour (accent.withAlpha (0.16f)); g.fillRect (plot.getX(), plot.getY(), fx - plot.getX(), plot.getHeight());
-            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.16f), fx, 0.f, accent.withAlpha (0.04f), hx, 0.f, false));
-            g.fillRect (fx, plot.getY(), hx - fx, plot.getHeight());
+            const float fx = xOf (juce::jmin (20000.f, bassLimit * 1.4f));   // the allowed boost comes back in between
+            g.setColour (accent.withAlpha (0.16f)); g.fillRect (plot.getX(), plot.getY(), hx - plot.getX(), plot.getHeight());
+            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.16f), hx, 0.f, accent.withAlpha (0.f), fx, 0.f, false));
+            g.fillRect (hx, plot.getY(), fx - hx, plot.getHeight());
         }
         g.setColour (accent); g.drawVerticalLine ((int) hx, plot.getY(), plot.getBottom());
         auto grip = juce::Rectangle<float> (hx - 4.f, plot.getCentreY() - 16.f, 8.f, 32.f);
@@ -1090,7 +1090,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         panel->addToggle ("Respect max boost", "clamp", "Limit boosts to the global maximum and the profile's own ceiling");
         panel->addSlider ("Max boost", "maxboost", " dB", "Global limit for boosts. The profile's own ceiling (dashed line) also applies.");
         panel->addSlider ("Max slope", "maxslope", {}, "Limits how fast the BOOSTS may rise, in dB per octave: the further left, the stricter (the maximum is off). Narrow boosts, usually in the treble, are cut first; cuts are never limited, so the curve can sit a little lower there. AutoEq uses 18 dB/oct.");
-        panel->addSlider ("Bass limit", "basslimit", {}, "Correction fades out below this frequency (the lowest setting is off). Use it when the speaker cannot reproduce deep bass. Also draggable on the graph.");
+        panel->addSlider ("Bass limit", "basslimit", {}, "Correction fades out below this frequency (the lowest setting is off). Boosts below it are cancelled; use it when the speaker cannot reproduce deep bass. Also draggable on the graph.");
         panel->addSlider ("Treble gain", "treblegain", " %", "Scales the correction above about 4-8 kHz. 100 % = untouched, 0 % = no treble correction.");
         panel->finish();
         showPanel (std::move (panel), limits);
