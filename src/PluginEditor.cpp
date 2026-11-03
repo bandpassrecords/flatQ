@@ -99,10 +99,8 @@ void ResponseGraph::paint (juce::Graphics& g)
     g.fillAll (bg);
     auto plot = plotArea();
 
-    float peak = 12.f;   // y range: +-12 dB, growing in 6 dB steps when the data needs it
     const float pre = (float) data.preampDb;   // the preamp lives in the output fader: the curves are drawn relative to 0 dB
-    for (auto* set : { &data.measured, &data.actual }) for (auto& v : *set) for (float x : v) peak = juce::jmax (peak, std::abs (x - (set == &data.actual ? pre : 0.f)));
-    const float range = juce::jmin (24.f, std::ceil (peak / 6.f) * 6.f);   // capped: deep roll-offs are clipped instead of squashing the graph
+    const float range = 24.f;                  // fixed +-24 dB: gentler-looking curves; deeper excursions are clipped at the edge
     auto yOf = [&] (float db) { return plot.getBottom() - (db + range) / (2 * range) * plot.getHeight(); };
 
     // legend: Target = the flat line we aim for; Measured = inverse of the profile (what the speaker/headphone does);
