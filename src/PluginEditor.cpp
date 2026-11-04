@@ -1266,7 +1266,7 @@ void FlatQEditor::setChoice (const char* id, int index)
 void FlatQEditor::showPanel (std::unique_ptr<juce::Component> c, juce::Component& from)
 {
     c->setLookAndFeel (&laf);   // the call-out is a separate window: it would otherwise fall back to the default look
-    auto& box = juce::CallOutBox::launchAsynchronously (std::move (c), from.getScreenBounds(), nullptr);
+    auto& box = juce::CallOutBox::launchAsynchronously (std::move (c), getLocalArea (nullptr, from.getScreenBounds()), this);   // inside the editor: it never sticks out past the plug-in window
     callout = &box; calloutItem = &from;
     box.addComponentListener (this);
 }
