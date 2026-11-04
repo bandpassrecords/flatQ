@@ -1,6 +1,6 @@
 # flatQ
 
-A calibration EQ plugin (VST3, AU and standalone) that applies headphone or speaker correction profiles to your audio output. Put it on the master bus of your DAW.
+A calibration EQ plugin (VST3 and AU) that applies headphone or speaker correction profiles to your audio output. Put it on the master bus of your DAW.
 
 - **Two engines, your choice:** low-latency IIR, or linear-phase FIR (4096 / 8192 / 16384 taps).
 - **Per-channel profiles:** independent left/right responses, delays and gains.
@@ -15,15 +15,15 @@ Requires Xcode command line tools, CMake and Ninja (JUCE is fetched automaticall
 
 ```sh
 make setup      # install CMake + Ninja via Homebrew
-make build      # builds VST3, AU and Standalone, then runs tests
+make build      # builds VST3 and AU, then runs tests
 make install    # ad-hoc signs and installs to ~/Library/Audio/Plug-Ins
 make run        # open the standalone app
 make validate   # run Apple's auval on the AU
 ```
 
-Output goes to `build/FlatQ_artefacts/Release/`. Use `make universal` for an arm64 + x86_64 build. No Apple Developer account is needed for personal use; for distribution, add Developer ID signing and notarization.
+Output goes to `build/FlatQ_artefacts/Release/`. Use `make universal` for an arm64 + x86_64 build.
 
-CI (`.github/workflows/`) builds macOS, Windows and Linux on every push; pushing a `v*` tag creates a release with zipped binaries.
+CI (`.github/workflows/`) builds macOS, Windows and Linux on every push; pushing a `v*` tag creates a release with the VST3 and AU zips.
 
 ## Using it
 

@@ -1,7 +1,5 @@
 name: Release
 # Tag e.g. v0.1.0 -> builds all platforms and attaches the zips to a GitHub release.
-# Binaries are ad-hoc signed only. For distribution without Gatekeeper warnings add Developer ID
-# signing + notarization secrets (see README "Signing").
 on:
   push: { tags: ["v*"] }
 permissions: { contents: write, actions: write }
@@ -22,8 +20,6 @@ jobs:
         with:
           files: |
             dist/*.zip
-            dist/*.pkg
-            dist/*.exe
           generate_release_notes: true
       - name: Update the download links on the website
         env:

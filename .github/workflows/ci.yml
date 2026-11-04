@@ -16,9 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14,       name: macOS,   targets: "FlatQ_VST3 FlatQ_AU FlatQ_Standalone", archs: "arm64;x86_64" }
-          - { os: windows-latest, name: Windows, targets: "FlatQ_VST3 FlatQ_Standalone",           archs: "" }
-          - { os: ubuntu-latest,  name: Linux,   targets: "FlatQ_VST3 FlatQ_Standalone",           archs: "" }
+          - { os: macos-14,       name: macOS,   targets: "FlatQ_VST3 FlatQ_AU", archs: "arm64;x86_64" }
+          - { os: windows-latest, name: Windows, targets: "FlatQ_VST3",                          archs: "" }
+          - { os: ubuntu-latest,  name: Linux,   targets: "FlatQ_VST3",                          archs: "" }
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -69,30 +69,16 @@ jobs:
           mkdir -p dist
           cd build/FlatQ_artefacts/Release
           if [ "$RUNNER_OS" = macOS ]; then
-            for d in VST3/flatQ.vst3 AU/flatQ.component Standalone/flatQ.app; do codesign --force --deep -s - "$d"; done
+            for d in VST3/flatQ.vst3 AU/flatQ.component; do codesign --force --deep -s - "$d"; done
             ditto -c -k --keepParent VST3/flatQ.vst3 ../../../dist/flatQ-VST3-macOS.zip
             ditto -c -k --keepParent AU/flatQ.component ../../../dist/flatQ-AU-macOS.zip
-            ditto -c -k --keepParent Standalone/flatQ.app ../../../dist/flatQ-Standalone-macOS.zip
-            cd ../../..
-            installers/macos/build-pkg.sh "$VERSION"
-            cd build/FlatQ_artefacts/Release
           elif [ "$RUNNER_OS" = Windows ]; then
             7z a ../../../dist/flatQ-VST3-Windows.zip VST3/flatQ.vst3
-            7z a ../../../dist/flatQ-Standalone-Windows.zip Standalone/flatQ.exe
-            cd ../../..
-            ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
-            [ -x "$ISCC" ] || { choco install innosetup -y --no-progress; }
-            "$ISCC" "//DAppVersion=${VERSION#v}" installers/windows/flatq.iss
-            cd build/FlatQ_artefacts/Release
           else
             zip -r ../../../dist/flatQ-VST3-Linux.zip VST3/flatQ.vst3
-            zip -r ../../../dist/flatQ-Standalone-Linux.zip Standalone/flatQ
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: flatQ-${{ matrix.name }}
-          path: |
-            dist/*.zip
-            dist/*.pkg
-            dist/*.exe
+          path: dist/*.zip
