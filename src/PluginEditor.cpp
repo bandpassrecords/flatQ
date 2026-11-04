@@ -155,12 +155,12 @@ void ResponseGraph::paint (juce::Graphics& g)
     auto yOf = [&] (float db) { return plot.getBottom() - (db + range) / (2 * range) * plot.getHeight(); };
 
     // legend: Target = the flat line we aim for; Measured = inverse of the profile (what the speaker/headphone does);
-    // EQ = the filter we apply; Result = Measured + EQ, which should land on the flat target
+    // Calibration = the filter we apply; Result = Measured + Calibration, which should land on the flat target
     const juce::Colour measuredCol (0xfffbbf24), eqCol = accent;
     {
         struct Item { const char* name; bool* on; bool visible; juce::Colour col; };
         Item items[5] = { { "Target (flat)", &showTarget, true, good }, { "Measured", &showMeasured, true, measuredCol },
-                          { "EQ", &showEq, true, eqCol }, { "Result", &showResult, true, result },
+                          { "Calibration", &showEq, true, eqCol }, { "Result", &showResult, true, result },
                           { "Boost limit", &showLimit, data.hasCeiling, dim } };
         int x = 14;
         g.setFont (juce::FontOptions (13.f));
@@ -168,13 +168,22 @@ void ResponseGraph::paint (juce::Graphics& g)
         {
             legendHit[i] = {};
             if (! items[i].visible) continue;
-            const int w = 34 + 7 * (int) std::strlen (items[i].name);
+            const bool lr = data.perChannel && i > 0 && i < 4;   // L / R dots on the curve entries
+            const int w = 34 + (lr ? 10 : 0) + 7 * (int) std::strlen (items[i].name);
             legendHit[i] = { x, 6, w, 24 };
             const float a = *items[i].on ? 1.f : 0.35f;
             auto dot = [&] (float cx, juce::Colour c) { g.setColour (c.withAlpha (a)); g.fillEllipse (cx - 5.f, 18.f - 5.f, 10.f, 10.f); };
+            auto letterDot = [&] (float cx, juce::Colour c, const char* l)
+            {
+                g.setColour (c.withAlpha (a)); g.fillEllipse (cx - 8.f, 18.f - 8.f, 16.f, 16.f);
+                g.setColour (bg.withAlpha (a)); g.setFont (juce::FontOptions (10.f, juce::Font::bold));
+                g.drawText (l, (int) cx - 8, 10, 16, 16, juce::Justification::centred);
+                g.setFont (juce::FontOptions (13.f));
+            };
             float cx = (float) x + 6.f;
             if (i == 4) { g.setColour (dim.withAlpha (a)); g.drawHorizontalLine (18, (float) x, (float) x + 12.f); cx += 6.f; }
-            else { dot (cx, items[i].col); if (data.perChannel && i > 0) { dot (cx + 12.f, items[i].col.brighter (0.5f)); cx += 12.f; } }
+            else if (lr) { cx += 2.f; letterDot (cx, items[i].col.brighter (0.5f), "L"); letterDot (cx + 18.f, items[i].col, "R"); cx += 18.f; }
+            else dot (cx, items[i].col);
             g.setColour (text.withAlpha (a));
             g.drawText (items[i].name, (int) cx + 12, 6, w, 24, juce::Justification::centredLeft);
             x += w + 10;
@@ -246,7 +255,7 @@ void ResponseGraph::paint (juce::Graphics& g)
         g.setColour (dim); g.fillPath (dashed);
     }
     const int nDraw = data.perChannel ? 2 : 1;
-    auto shade = [] (juce::Colour c, int ch) { return ch == 0 ? c : c.brighter (0.5f); };   // R is a lighter shade of L
+    auto shade = [] (juce::Colour c, int ch) { return ch == 0 ? c.brighter (0.5f) : c; };   // L is the lighter shade, R the base one
     auto strokeCurve = [&] (const std::vector<float>& v, juce::Colour c, float w)
     { if (v.size() == data.freqs.size()) { g.setColour (c); g.strokePath (path (v), juce::PathStrokeType (w)); } };
 
