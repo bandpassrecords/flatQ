@@ -106,6 +106,9 @@ td{color:var(--text-secondary)}
 .dl .card{display:flex;flex-direction:column;gap:.8rem}
 .dl .card h3{font-size:1.3rem}
 .dl .card .note{margin-top:auto;color:var(--text-muted);font-size:.82rem}
+.alt-links{font-size:.9rem}
+.alt-links a{color:var(--accent);text-decoration:none}
+.alt-links a:hover{text-decoration:underline}
 .dl .btn{text-align:center;padding:.75rem 1.2rem;font-size:.95rem}
 
 footer{padding:3rem 0;background:var(--bg-darker);border-top:1px solid var(--border-color)}
@@ -284,11 +287,20 @@ footer{padding:3rem 0;background:var(--bg-darker);border-top:1px solid var(--bor
       <p class="section-subtitle">Pick your system. Every release is on GitHub.</p>
     </div>
     <div class="dl">
-      <div class="card"><h3>macOS</h3><p>VST3, Audio Unit and standalone app.</p><a class="btn btn-primary" href="https://github.com/bandpassrecords/flatQ/releases/latest">Download for macOS</a><p class="note">Not notarized by Apple yet: right-click the app and choose Open the first time.</p></div>
-      <div class="card"><h3>Windows</h3><p>VST3 and standalone app.</p><a class="btn btn-primary" href="https://github.com/bandpassrecords/flatQ/releases/latest">Download for Windows</a><p class="note">Not code-signed yet: Windows may show a warning on first run.</p></div>
-      <div class="card"><h3>Linux</h3><p>VST3 and standalone app.</p><a class="btn btn-primary" href="https://github.com/bandpassrecords/flatQ/releases/latest">Download for Linux</a><p class="note">Zip archives; copy the VST3 to ~/.vst3.</p></div>
+      <div class="card"><h3>macOS</h3><p>VST3, Audio Unit and standalone app.</p>
+        <a class="btn btn-primary" data-asset="flatQ-*-macOS.pkg" href="https://github.com/bandpassrecords/flatQ/releases/latest">Installer (.pkg)</a>
+        <p class="alt-links"><a data-asset="flatQ-VST3-macOS.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">VST3</a> · <a data-asset="flatQ-AU-macOS.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">AU</a> · <a data-asset="flatQ-Standalone-macOS.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">Standalone</a> (.zip)</p>
+        <p class="note">Not notarized by Apple yet: right-click the app and choose Open the first time.</p></div>
+      <div class="card"><h3>Windows</h3><p>VST3 and standalone app.</p>
+        <a class="btn btn-primary" data-asset="flatQ-*-Windows-Setup.exe" href="https://github.com/bandpassrecords/flatQ/releases/latest">Installer (.exe)</a>
+        <p class="alt-links"><a data-asset="flatQ-VST3-Windows.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">VST3</a> · <a data-asset="flatQ-Standalone-Windows.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">Standalone</a> (.zip)</p>
+        <p class="note">Not code-signed yet: Windows may show a warning on first run.</p></div>
+      <div class="card"><h3>Linux</h3><p>VST3 and standalone app.</p>
+        <a class="btn btn-primary" data-asset="flatQ-VST3-Linux.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">VST3 (.zip)</a>
+        <p class="alt-links"><a data-asset="flatQ-Standalone-Linux.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">Standalone</a> (.zip)</p>
+        <p class="note">Copy the VST3 to ~/.vst3.</p></div>
     </div>
-    <p class="more">Source code and every release on <a href="https://github.com/bandpassrecords/flatQ">GitHub</a>.</p>
+    <p class="more"><span data-version></span> Source code and every release on <a href="https://github.com/bandpassrecords/flatQ">GitHub</a>.</p>
   </div>
 </section>
 </main>
