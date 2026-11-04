@@ -17,6 +17,8 @@ juce_add_plugin(FlatQ
     PLUGIN_MANUFACTURER_CODE FlTq
     PLUGIN_CODE FlQp
     FORMATS VST3 AU Standalone
+    VST3_CATEGORIES Fx EQ                     # shows under Fx > EQ instead of "Other"
+    AU_MAIN_TYPE kAudioUnitType_Effect
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
