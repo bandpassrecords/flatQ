@@ -78,6 +78,8 @@ section{padding:6rem 0}
 .row{display:flex;justify-content:space-between;gap:1rem;padding:.55rem .8rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-darker);font-size:.9rem;color:var(--text-secondary)}
 .row b{color:var(--text-primary);font-weight:600}
 
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+.shots figure{margin:0}
 /* cards */
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem}
 .card{padding:1.6rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);transition:border-color .3s,transform .3s}
@@ -117,7 +119,7 @@ footer{padding:3rem 0;background:var(--bg-darker);border-top:1px solid var(--bor
   .hero-title{font-size:2.4rem}.section-title{font-size:2rem}
   .feature-row,.feature-row.reverse{grid-template-columns:1fr;gap:2rem}
   .feature-row.reverse .feature-visual{order:0}
-  .grid,.dl,.foot{grid-template-columns:1fr}
+  .grid,.dl,.foot,.shots{grid-template-columns:1fr}
   .nav-links a:not(.gh){display:none}
 }
 </style>
@@ -149,8 +151,23 @@ footer{padding:3rem 0;background:var(--bg-darker);border-top:1px solid var(--bor
     </div>
     <p class="hero-plats mono">macOS · Windows · Linux</p>
     <div class="hero-visual">
-      <div class="app-window"><img src="img/app.png" alt="flatQ showing the correction curve of a headphone profile, with the profile list, level meters and output fader"></div>
+      <div class="app-window"><img src="img/app.png" alt="flatQ showing the left and right correction curves of a speaker profile, with the profile list, level meters and output fader"></div>
     </div>
+  </div>
+</section>
+
+<section id="gallery">
+  <div class="container">
+    <div class="section-head">
+      <p class="eyebrow mono">Screenshots</p>
+      <h2 class="section-title">Headphones and speakers, side by side</h2>
+      <p class="section-subtitle">The same view for both: the measured response, the calibration and the result, for each channel.</p>
+    </div>
+    <div class="shots">
+      <figure class="app-window"><img src="img/app-headphones.png" alt="flatQ with a headphone profile loaded" loading="lazy"></figure>
+      <figure class="app-window"><img src="img/app.png" alt="flatQ with a speaker profile loaded" loading="lazy"></figure>
+    </div>
+    <p class="more">Profiles shown are examples made for these screenshots.</p>
   </div>
 </section>
 
