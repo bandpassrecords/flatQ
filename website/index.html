@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flatQ — Calibrate your headphones and speakers</title>
+<meta name="description" content="flatQ is a calibration EQ plug-in (VST3, AU and standalone) that applies headphone and speaker correction profiles to your output.">
+<link rel="icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-darker:#0e0e0e; --bg-dark:#151515; --bg-card:#1c1c1c; --bg-raise:#242424;
+  --text-primary:#fff; --text-secondary:#b4b4b4; --text-muted:#858585;
+  --accent:#46c47c; --accent-hover:#5ad48e; --accent-soft:#46c47c1f; --accent-line:#46c47c4d;
+  --border-color:#2e2e2e; --shadow:#0000008c;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{background:var(--bg-darker);color:var(--text-primary);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.6;overflow-x:hidden}
+a{color:inherit}
+.container{max-width:1200px;margin:0 auto;padding:0 20px}
+.mono{font-family:SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace}
+
+/* nav */
+.navbar{position:sticky;top:0;z-index:1000;background:#1c1c1cf2;border-bottom:1px solid var(--border-color);backdrop-filter:blur(10px)}
+.nav-content{display:flex;justify-content:space-between;align-items:center;padding:.9rem 0;gap:1rem}
+.logo{display:flex;align-items:center;gap:12px;font-size:1.25rem;font-weight:600;text-decoration:none}
+.logo img{width:32px;height:32px;border-radius:7px}
+.nav-links{display:flex;align-items:center;gap:2rem}
+.nav-links a{color:var(--text-secondary);font-weight:500;text-decoration:none;transition:color .3s}
+.nav-links a:hover{color:var(--text-primary)}
+.nav-links a.gh{background:var(--bg-raise);border:1px solid var(--border-color);border-radius:6px;padding:.45rem 1rem;color:var(--text-primary)}
+.nav-links a.gh:hover{border-color:var(--accent-line)}
+
+/* hero */
+.hero{position:relative;overflow:hidden;text-align:center;padding:6rem 0 4rem;background:linear-gradient(135deg,var(--bg-darker) 0%,var(--bg-dark) 100%)}
+.hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 0,#46c47c26 0%,#0000 65%)}
+.hero-content{position:relative;z-index:1}
+.pill{display:inline-block;margin-bottom:1.6rem;padding:.3rem .9rem;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent);border-radius:99px;font-size:.78rem;text-decoration:none}
+.hero-title{font-size:3.5rem;font-weight:700;line-height:1.15;margin-bottom:1.5rem;background:linear-gradient(135deg,#fff 0%,#b4b4b4 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero-subtitle{max-width:700px;margin:0 auto 2.5rem;color:var(--text-secondary);font-size:1.25rem;line-height:1.8}
+.hero-buttons{display:flex;flex-wrap:wrap;justify-content:center;gap:1rem;margin-bottom:1.6rem}
+.btn{display:inline-block;padding:.875rem 2rem;border-radius:8px;border:2px solid transparent;font-size:1rem;font-weight:600;text-decoration:none;transition:all .3s;cursor:pointer}
+.btn-primary{background:var(--accent);color:#04140b}
+.btn-primary:hover{background:var(--accent-hover);transform:translateY(-2px);box-shadow:0 8px 20px #46c47c4d}
+.btn-secondary{border-color:var(--border-color);color:var(--text-primary)}
+.btn-secondary:hover{border-color:var(--accent-line);background:var(--bg-card)}
+.hero-plats{margin-bottom:3rem;color:var(--text-muted);font-size:.8rem;letter-spacing:.02em}
+.app-window{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;overflow:hidden}
+.hero-visual .app-window{max-width:980px;margin:0 auto;box-shadow:0 30px 60px -20px var(--shadow)}
+.app-window img{display:block;width:100%;height:auto}
+
+/* sections */
+section{padding:6rem 0}
+.alt{background:var(--bg-dark)}
+.section-head{max-width:600px;margin:0 auto 3.5rem;text-align:center}
+.eyebrow{margin-bottom:.9rem;color:var(--accent);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase}
+.section-title{font-size:2.5rem;font-weight:700;margin-bottom:.75rem}
+.section-subtitle{color:var(--text-secondary);font-size:1.125rem}
+
+/* feature rows */
+.feature-row{display:grid;grid-template-columns:1.15fr 1fr;gap:4.5rem;align-items:center;padding:3.2rem 0;border-bottom:1px solid var(--border-color)}
+.feature-row:last-child{border-bottom:none}
+.feature-row.reverse{grid-template-columns:1fr 1.15fr}
+.feature-row.reverse .feature-visual{order:2}
+.feature-kicker{margin-bottom:.7rem;color:var(--accent);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase}
+.feature-copy h3{margin-bottom:.7rem;font-size:1.55rem;font-weight:700;letter-spacing:-.01em}
+.feature-copy p{color:var(--text-secondary);max-width:44ch;font-size:.98rem;line-height:1.7}
+.feature-copy ul{margin-top:1rem;list-style:none;color:var(--text-secondary);font-size:.95rem}
+.feature-copy li{position:relative;padding-left:1.3rem;margin-bottom:.4rem}
+.feature-copy li:before{content:"";position:absolute;left:0;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.visual{padding:1.6rem;display:flex;flex-direction:column;gap:.7rem;min-height:220px;justify-content:center}
+.chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.chip{padding:.35rem .8rem;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-darker);color:var(--text-secondary);font-size:.85rem}
+.chip.on{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent)}
+.row{display:flex;justify-content:space-between;gap:1rem;padding:.55rem .8rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-darker);font-size:.9rem;color:var(--text-secondary)}
+.row b{color:var(--text-primary);font-weight:600}
+
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+.shots figure{margin:0}
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem}
+.card{padding:1.6rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);transition:border-color .3s,transform .3s}
+.card:hover{border-color:var(--accent-line);transform:translateY(-3px)}
+.card .eyebrow{margin-bottom:.6rem}
+.card h3{margin-bottom:.5rem;font-size:1.15rem}
+.card p{color:var(--text-secondary);font-size:.93rem;line-height:1.65}
+.more{margin-top:3rem;text-align:center;color:var(--text-secondary)}
+.more a{color:var(--accent);text-decoration:none}
+.more a:hover{text-decoration:underline}
+
+/* formats table */
+.table-wrap{overflow-x:auto;border:1px solid var(--border-color);border-radius:12px}
+table{width:100%;border-collapse:collapse;background:var(--bg-card);font-size:.95rem}
+th,td{padding:.9rem 1.2rem;text-align:left;border-bottom:1px solid var(--border-color)}
+th{color:var(--text-muted);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+tr:last-child td{border-bottom:none}
+td:first-child{font-weight:600}
+td{color:var(--text-secondary)}
+.yes{color:var(--accent)}
+
+/* download */
+.dl{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem}
+.dl .card{display:flex;flex-direction:column;gap:.8rem}
+.dl .card h3{font-size:1.3rem}
+.dl .card .note{margin-top:auto;color:var(--text-muted);font-size:.82rem}
+.alt-links{font-size:.9rem}
+.alt-links a{color:var(--accent);text-decoration:none}
+.alt-links a:hover{text-decoration:underline}
+.dl .btn{text-align:center;padding:.75rem 1.2rem;font-size:.95rem}
+
+footer{padding:3rem 0;background:var(--bg-darker);border-top:1px solid var(--border-color)}
+.foot{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:2rem}
+.foot h4{margin-bottom:.8rem;color:var(--text-muted);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase}
+.foot p,.foot a{display:block;margin-bottom:.4rem;color:var(--text-secondary);font-size:.92rem;text-decoration:none}
+.foot a:hover{color:var(--accent)}
+.copy{margin-top:2.2rem;padding-top:1.5rem;border-top:1px solid var(--border-color);color:var(--text-muted);font-size:.82rem}
+
+@media (max-width:900px){
+  .hero-title{font-size:2.4rem}.section-title{font-size:2rem}
+  .feature-row,.feature-row.reverse{grid-template-columns:1fr;gap:2rem}
+  .feature-row.reverse .feature-visual{order:0}
+  .grid,.dl,.foot,.shots{grid-template-columns:1fr}
+  .nav-links a:not(.gh){display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="container nav-content">
+    <a class="logo" href="#"><img src="img/icon.png" alt="">flatQ</a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#engine">Engine</a>
+      <a href="#formats">Formats</a>
+      <a href="#download">Download</a>
+      <a class="gh" href="https://github.com/bandpassrecords/flatQ">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero" style="padding-top:6rem">
+  <div class="container hero-content">
+    <a class="pill mono" href="#download">VST3 · AU · Standalone</a>
+    <h1 class="hero-title">Hear your music as it was mixed.</h1>
+    <p class="hero-subtitle">flatQ applies a correction profile for your headphones or speakers to everything you play, so what you hear is the music and not the transducer.</p>
+    <div class="hero-buttons">
+      <a class="btn btn-primary" href="#download">Download</a>
+      <a class="btn btn-secondary" href="#features">See what it does</a>
+    </div>
+    <p class="hero-plats mono">macOS · Windows · Linux</p>
+    <div class="hero-visual">
+      <div class="app-window"><img src="img/app.png" alt="flatQ showing the left and right correction curves of a speaker profile, with the profile list, level meters and output fader"></div>
+    </div>
+  </div>
+</section>
+
+<section id="gallery">
+  <div class="container">
+    <div class="section-head">
+      <p class="eyebrow mono">Screenshots</p>
+      <h2 class="section-title">Headphones and speakers, side by side</h2>
+      <p class="section-subtitle">The same view for both: the measured response, the calibration and the result, for each channel.</p>
+    </div>
+    <div class="shots">
+      <figure class="app-window"><img src="img/app-headphones.png" alt="flatQ with a headphone profile loaded" loading="lazy"></figure>
+      <figure class="app-window"><img src="img/app.png" alt="flatQ with a speaker profile loaded" loading="lazy"></figure>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="alt">
+  <div class="container">
+    <div class="section-head">
+      <p class="eyebrow mono">What it does</p>
+      <h2 class="section-title">A flat reference, on any monitor</h2>
+      <p class="section-subtitle">Every transducer colours the sound. flatQ measures nothing and guesses nothing: it loads a profile and applies the inverse of it.</p>
+    </div>
+
+    <div class="feature-rows">
+      <div class="feature-row">
+        <div class="feature-visual app-window visual">
+          <div class="chips"><span class="chip on">Headphones</span><span class="chip on">Speakers</span><span class="chip">.flatq</span><span class="chip">RME TotalMix .tmreq</span><span class="chip">AutoEq CSV</span></div>
+          <div class="row"><span>Sennheiser HD 490 Pro — Mixing</span><b>profile</b></div>
+          <div class="row"><span>Independent left / right</span><b>speaker</b></div>
+        </div>
+        <div class="feature-copy">
+          <p class="feature-kicker mono">Profiles</p>
+          <h3>Bring your own calibration</h3>
+          <p>Load a profile for your headphones or your monitors and switch between them from the library on the left. Rename, duplicate, export or delete from the menu on each one.</p>
+          <ul>
+            <li>flatQ profiles and RME TotalMix Room EQ files</li>
+            <li>AutoEq measurement and target CSVs, turned into a profile</li>
+            <li>Speaker profiles keep separate left and right curves</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="feature-row reverse">
+        <div class="feature-visual app-window visual">
+          <div class="row"><span>Max boost</span><b>+6 dB</b></div>
+          <div class="row"><span>Bass limit</span><b>50 Hz</b></div>
+          <div class="row"><span>Max slope</span><b>18 dB / oct</b></div>
+          <div class="row"><span>Preamp</span><b>−6.0 dB</b></div>
+        </div>
+        <div class="feature-copy">
+          <p class="feature-kicker mono">Limits</p>
+          <h3>Correction without the clipping</h3>
+          <p>Deep dips in a measurement ask for huge boosts. flatQ keeps them in check so a profile never pushes your output into the red.</p>
+          <ul>
+            <li>Global max boost plus the profile's own ceiling</li>
+            <li>A bass limit that cancels boosts below the frequency you choose</li>
+            <li>Slope limiter and treble smoothing against ringing</li>
+            <li>Automatic preamp, shown right on the output fader</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="feature-row">
+        <div class="feature-visual app-window visual">
+          <div class="chips"><span class="chip on">L</span><span class="chip on">R</span><span class="chip">Mono</span><span class="chip">Swap L/R</span><span class="chip">Mute</span></div>
+          <div class="row"><span>Dry / Wet</span><b>100 %</b></div>
+          <div class="row"><span>Calibration</span><b class="yes">Enabled</b></div>
+        </div>
+        <div class="feature-copy">
+          <p class="feature-kicker mono">Control</p>
+          <h3>See it. Compare it. Switch it off.</h3>
+          <p>The graph shows the target, what your monitor does and the correction in between, for each channel. One button turns the calibration off to hear the difference.</p>
+          <ul>
+            <li>Input and output meters with clip lights</li>
+            <li>Mono, swap channels, mute and a dry / wet mix</li>
+            <li>Notices on the graph whenever something changes what you hear</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="engine">
+  <div class="container">
+    <div class="section-head">
+      <p class="eyebrow mono">Under the hood</p>
+      <h2 class="section-title">Built for critical listening</h2>
+      <p class="section-subtitle">Pick the trade-off between latency and phase accuracy that suits the job.</p>
+    </div>
+    <div class="grid">
+      <div class="card"><p class="eyebrow mono">Default</p><h3>Minimum-phase FIR</h3><p>A smooth, natural correction with no pre-ringing. 4096 to 65536 taps; 16384 by default.</p></div>
+      <div class="card"><p class="eyebrow mono">Accuracy</p><h3>Linear-phase FIR</h3><p>Perfectly symmetric, for when phase accuracy matters more than latency.</p></div>
+      <div class="card"><p class="eyebrow mono">Low latency</p><h3>IIR</h3><p>Peaking filters with 6 or 48 bands per octave, for monitoring while you record.</p></div>
+      <div class="card"><p class="eyebrow mono">Manual</p><h3>31-band trim</h3><p>Adjust each third-octave band on top of the profile, per channel or linked, and save the result as a new profile.</p></div>
+      <div class="card"><p class="eyebrow mono">Export</p><h3>Skip on offline export</h3><p>Pass the audio through untouched during offline renders, so a mixdown never carries your monitor correction.</p></div>
+      <div class="card"><p class="eyebrow mono">Targets</p><h3>Flat, or a curve you prefer</h3><p>Ships with the AutoEq target curves, such as Harman, for importing a measurement against the target you like.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="formats" class="alt">
+  <div class="container">
+    <div class="section-head">
+      <p class="eyebrow mono">Formats</p>
+      <h2 class="section-title">Put it last on your master</h2>
+      <p class="section-subtitle">Insert flatQ as the last effect on your master or stereo out.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Platform</th><th>VST3</th><th>AU</th><th>Standalone</th></tr></thead>
+        <tbody>
+          <tr><td>macOS</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>Windows</td><td class="yes">✓</td><td>—</td><td class="yes">✓</td></tr>
+          <tr><td>Linux</td><td class="yes">✓</td><td>—</td><td class="yes">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="container">
+    <div class="section-head">
+      <p class="eyebrow mono">Download</p>
+      <h2 class="section-title">Get flatQ</h2>
+      <p class="section-subtitle">Pick your system. Every release is on GitHub.</p>
+    </div>
+    <div class="dl">
+      <div class="card"><h3>macOS</h3><p>VST3, Audio Unit and standalone app.</p>
+        <a class="btn btn-primary" data-asset="flatQ-*-macOS.pkg" href="https://github.com/bandpassrecords/flatQ/releases/latest">Installer (.pkg)</a>
+        <p class="alt-links"><a data-asset="flatQ-VST3-macOS.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">VST3</a> · <a data-asset="flatQ-AU-macOS.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">AU</a> · <a data-asset="flatQ-Standalone-macOS.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">Standalone</a> (.zip)</p>
+        <p class="note">Not notarized by Apple yet: right-click the app and choose Open the first time.</p></div>
+      <div class="card"><h3>Windows</h3><p>VST3 and standalone app.</p>
+        <a class="btn btn-primary" data-asset="flatQ-*-Windows-Setup.exe" href="https://github.com/bandpassrecords/flatQ/releases/latest">Installer (.exe)</a>
+        <p class="alt-links"><a data-asset="flatQ-VST3-Windows.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">VST3</a> · <a data-asset="flatQ-Standalone-Windows.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">Standalone</a> (.zip)</p>
+        <p class="note">Not code-signed yet: Windows may show a warning on first run.</p></div>
+      <div class="card"><h3>Linux</h3><p>VST3 and standalone app.</p>
+        <a class="btn btn-primary" data-asset="flatQ-VST3-Linux.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">VST3 (.zip)</a>
+        <p class="alt-links"><a data-asset="flatQ-Standalone-Linux.zip" href="https://github.com/bandpassrecords/flatQ/releases/latest">Standalone</a> (.zip)</p>
+        <p class="note">Copy the VST3 to ~/.vst3.</p></div>
+    </div>
+    <p class="more"><span data-version></span> Source code and every release on <a href="https://github.com/bandpassrecords/flatQ">GitHub</a>.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="foot">
+      <div><div class="logo" style="margin-bottom:.8rem"><img src="img/icon.png" alt="">flatQ</div><p>Calibration EQ for headphones and speakers. VST3, AU and standalone.</p></div>
+      <div><h4>Resources</h4><a href="https://github.com/bandpassrecords/flatQ">GitHub</a><a href="https://github.com/bandpassrecords/flatQ/issues">Report an issue</a><a href="https://github.com/bandpassrecords/flatQ/releases">All releases</a></div>
+      <div><h4>Built with</h4><a href="https://juce.com">JUCE</a><a href="https://github.com/jaakkopasanen/AutoEq">AutoEq (targets)</a></div>
+    </div>
+    <p class="copy">© 2026 flatQ by BandPass Records.</p>
+  </div>
+</footer>
+</body>
+</html>

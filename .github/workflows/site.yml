@@ -1,0 +1,38 @@
+# The website (flatq.bandpassrecords.com): website/ is published by committing it to the gh-pages branch,
+# which GitHub Pages serves. The download links are read from the newest release at publish time, so this runs
+# on a push that changes the site and when the release workflow asks after publishing a release.
+name: Website
+on:
+  push:
+    branches: [main]
+    paths: ['website/**', 'tools/update_site.py', '.github/workflows/site.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: website
+  cancel-in-progress: false
+jobs:
+  website:
+    name: Publish the website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point the download links at the newest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/update_site.py website "${{ github.repository }}"
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+      - name: Publish to gh-pages
+        run: |
+          rsync -a --delete --exclude .git website/ gh-pages/
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then echo "The site is unchanged."; exit 0; fi
+          git commit -m "Website from ${GITHUB_SHA::8}"
+          git push
