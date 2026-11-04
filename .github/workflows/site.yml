@@ -1,11 +1,8 @@
-# The website (flatq.bandpassrecords.com): website/ is published by committing it to the gh-pages branch,
-# which GitHub Pages serves. The download links are read from the newest release at publish time, so this runs
-# on a push that changes the site and when the release workflow asks after publishing a release.
+# The website (flatq.bandpassrecords.com) lives on the gh-pages branch, which GitHub Pages serves. The release
+# workflow runs this after publishing a release: it points the download links on gh-pages at the new assets and
+# commits the change there. It can also be run by hand.
 name: Website
 on:
-  push:
-    branches: [main]
-    paths: ['website/**', 'tools/update_site.py', '.github/workflows/site.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -13,26 +10,25 @@ concurrency:
   group: website
   cancel-in-progress: false
 jobs:
-  website:
-    name: Publish the website
+  links:
+    name: Update the download links
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Point the download links at the newest release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 tools/update_site.py website "${{ github.repository }}"
       - uses: actions/checkout@v4
         with:
           ref: gh-pages
           path: gh-pages
-      - name: Publish to gh-pages
+      - name: Point the download links at the newest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/update_site.py gh-pages "${{ github.repository }}"
+      - name: Commit to gh-pages
         run: |
-          rsync -a --delete --exclude .git website/ gh-pages/
           cd gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          if git diff --staged --quiet; then echo "The site is unchanged."; exit 0; fi
-          git commit -m "Website from ${GITHUB_SHA::8}"
+          if git diff --staged --quiet; then echo "The links are unchanged."; exit 0; fi
+          git commit -m "Download links for $(git -C .. describe --tags --abbrev=0 2>/dev/null || echo the newest release)"
           git push

@@ -1,7 +1,7 @@
 name: CI
 on:
-  push: { branches: [main], paths-ignore: ['website/**', '**.md', 'tools/update_site.py', '.github/workflows/site.yml'] }
-  pull_request: { paths-ignore: ['website/**', '**.md', 'tools/update_site.py', '.github/workflows/site.yml'] }
+  push: { branches: [main], paths-ignore: ['**.md', 'tools/update_site.py', '.github/workflows/site.yml'] }
+  pull_request: { paths-ignore: ['**.md', 'tools/update_site.py', '.github/workflows/site.yml'] }
   workflow_call:
 concurrency:
   group: ci-${{ github.ref }}
