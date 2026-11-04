@@ -1,4 +1,4 @@
-// Native FlatQ profile (".flatq"): a small, human-readable text format.
+// Native flatQ profile (".flatq"): a small, human-readable text format.
 //
 //   flatq 1
 //   name Focal Speakers - Flat
@@ -177,7 +177,7 @@ struct FlatqProfile {
     }
 
     std::string serialize() const {
-        std::string o = "# FlatQ profile\nflatq 1\nname " + name + "\n";
+        std::string o = "# flatQ profile\nflatq 1\nname " + name + "\n";
         if (!type.empty()) o += "type " + type + "\n";
         if (hintMaxBoostDb >= 0) o += "hint max_boost_db " + std::to_string(hintMaxBoostDb) + "\n";
         if (hintBassLimitHz >= 0) o += "hint bass_limit_hz " + std::to_string(hintBassLimitHz) + "\n";

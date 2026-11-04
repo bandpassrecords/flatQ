@@ -1,5 +1,5 @@
 // Import of AutoEq data (https://github.com/jaakkopasanen/AutoEq): a headphone/speaker measurement CSV plus a target CSV
-// ("frequency,raw" columns, dB) become a FlatQ profile. As in AutoEq, both curves are centred at 1 kHz and the
+// ("frequency,raw" columns, dB) become a flatQ profile. As in AutoEq, both curves are centred at 1 kHz and the
 // correction is target - measurement. AutoEq's own defaults (1/12 oct smoothing, 2 oct in the treble, 18 dB/oct slope
 // limit, 6 dB max gain) are stored as hints so the plugin reproduces what AutoEq would design.
 #pragma once

@@ -71,7 +71,7 @@ private:
 
     static int rank (const juce::String& source)   // lower = more trusted when several sources measured the same model
     {
-        static const char* order[] = { "FlatQ profile", "oratory1990", "Innerfidelity", "Rtings", "Headphone.com Legacy", "Super Review", "HypetheSonics" };
+        static const char* order[] = { "flatQ profile", "oratory1990", "Innerfidelity", "Rtings", "Headphone.com Legacy", "Super Review", "HypetheSonics" };
         for (int i = 0; i < 7; ++i) if (source == order[i]) return i;
         return 7;
     }
@@ -93,7 +93,7 @@ private:
         for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
         {
             const auto name = juce::File (BinaryData::getNamedResourceOriginalFilename (BinaryData::namedResourceList[i])).getFileNameWithoutExtension();
-            Entry e { "FlatQ profile", "over-ear", "", name.upToFirstOccurrenceOf (" ", false, false), name, name.fromFirstOccurrenceOf (" ", false, false), {}, true, i };
+            Entry e { "flatQ profile", "over-ear", "", name.upToFirstOccurrenceOf (" ", false, false), name, name.fromFirstOccurrenceOf (" ", false, false), {}, true, i };
             e.haystack = (e.name + " " + e.brand + " " + e.source).toLowerCase();
             entries.push_back (std::move (e));
         }

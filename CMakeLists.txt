@@ -9,7 +9,7 @@ FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.
 FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(FlatQ
-    PRODUCT_NAME "FlatQ"
+    PRODUCT_NAME "flatQ"
     COMPANY_NAME "BandPass Records"           # the vendor shown by hosts
     BUNDLE_ID "com.bandpassrecords.flatq"
     COMPANY_WEBSITE "https://flatq.bandpassrecords.com"

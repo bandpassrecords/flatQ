@@ -1,5 +1,5 @@
 // flatq_convert <input.(lvls|lvlsproj|tmreq|flatq)> <output.flatq> [--name "Display name"]
-// Converts a profile to the native FlatQ format and verifies the result reproduces the source response.
+// Converts a profile to the native flatQ format and verifies the result reproduces the source response.
 #include "../src/Profile.h"
 #include <cstdio>
 #include <fstream>

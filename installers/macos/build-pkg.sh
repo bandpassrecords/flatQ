@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/FlatQ-<version>-macOS.pkg from build/FlatQ_artefacts/Release (run scripts/build.sh first).
+# Builds dist/flatQ-<version>-macOS.pkg from build/FlatQ_artefacts/Release (run scripts/build.sh first).
 # Usage: installers/macos/build-pkg.sh [version]
 # Optional signing: set DEVELOPER_ID_INSTALLER="Developer ID Installer: Name (TEAMID)" to productsign the result.
 set -euo pipefail
@@ -8,10 +8,10 @@ VERSION="${1:-0.0.0-dev}"; VERSION="${VERSION#v}"
 A=build/FlatQ_artefacts/Release
 W=build/pkg; rm -rf "$W"; mkdir -p "$W/root/vst3" "$W/root/au" "$W/root/app" "$W/pkgs" dist
 
-ditto "$A/VST3/FlatQ.vst3"       "$W/root/vst3/FlatQ.vst3"
-ditto "$A/AU/FlatQ.component"    "$W/root/au/FlatQ.component"
-ditto "$A/Standalone/FlatQ.app"  "$W/root/app/FlatQ.app"
-for b in "$W"/root/vst3/FlatQ.vst3 "$W"/root/au/FlatQ.component "$W"/root/app/FlatQ.app; do
+ditto "$A/VST3/flatQ.vst3"       "$W/root/vst3/flatQ.vst3"
+ditto "$A/AU/flatQ.component"    "$W/root/au/flatQ.component"
+ditto "$A/Standalone/flatQ.app"  "$W/root/app/flatQ.app"
+for b in "$W"/root/vst3/flatQ.vst3 "$W"/root/au/flatQ.component "$W"/root/app/flatQ.app; do
   codesign --force --deep -s - "$b"
 done
 
@@ -32,7 +32,7 @@ build_component au   com.bandpassrecords.flatq.au   "/Library/Audio/Plug-Ins/Com
 build_component app  com.bandpassrecords.flatq.app  "/Applications"
 
 sed "s/@VERSION@/$VERSION/g" installers/macos/distribution.xml > "$W/distribution.xml"
-OUT="dist/FlatQ-$VERSION-macOS.pkg"
+OUT="dist/flatQ-$VERSION-macOS.pkg"
 if [ -n "${DEVELOPER_ID_INSTALLER:-}" ]; then
   productbuild --distribution "$W/distribution.xml" --package-path "$W/pkgs" "$W/unsigned.pkg" >/dev/null
   productsign --sign "$DEVELOPER_ID_INSTALLER" "$W/unsigned.pkg" "$OUT"

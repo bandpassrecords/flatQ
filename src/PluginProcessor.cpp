@@ -8,7 +8,7 @@
 class FlatQProcessor::DesignThread : public juce::Thread
 {
 public:
-    explicit DesignThread (FlatQProcessor& o) : juce::Thread ("FlatQ design"), owner (o) {}
+    explicit DesignThread (FlatQProcessor& o) : juce::Thread ("flatQ design"), owner (o) {}
     void run() override
     {
         while (! threadShouldExit())
@@ -101,14 +101,14 @@ static juce::PropertiesFile::Options settingsOptions()
 
 bool FlatQProcessor::getSetting (const juce::String& key, bool defaultValue)
 {
-    juce::PropertiesFile p (appDataDir().getChildFile ("FlatQ.settings"), settingsOptions());
+    juce::PropertiesFile p (appDataDir().getChildFile ("flatQ.settings"), settingsOptions());
     return p.getBoolValue (key, defaultValue);
 }
 
 void FlatQProcessor::setSetting (const juce::String& key, bool value)
 {
     appDataDir().createDirectory();
-    juce::PropertiesFile p (appDataDir().getChildFile ("FlatQ.settings"), settingsOptions());
+    juce::PropertiesFile p (appDataDir().getChildFile ("flatQ.settings"), settingsOptions());
     p.setValue (key, value);
     p.saveIfNeeded();
 }
@@ -218,7 +218,10 @@ juce::File FlatQProcessor::appDataDir()
    #if JUCE_MAC
     d = d.getChildFile ("Application Support");
    #endif
-    return d.getChildFile ("FlatQ");
+    const auto dir = d.getChildFile ("flatQ");
+    const auto old = d.getChildFile ("FlatQ");   // the folder used before the rename (same folder on a case-insensitive disk)
+    if (! dir.exists() && old.isDirectory()) old.moveFileTo (dir);
+    return dir;
 }
 
 juce::String FlatQProcessor::profileKind (const juce::File& file)

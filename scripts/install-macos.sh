@@ -8,6 +8,6 @@ install_one() { # src destdir
   mkdir -p "$2"; rm -rf "$2/$(basename "$1")"; cp -R "$1" "$2/"
   codesign --force --deep -s - "$2/$(basename "$1")"; echo "installed $2/$(basename "$1")"
 }
-install_one "$A/VST3/FlatQ.vst3"       "$HOME/Library/Audio/Plug-Ins/VST3"
-install_one "$A/AU/FlatQ.component"    "$HOME/Library/Audio/Plug-Ins/Components"
+install_one "$A/VST3/flatQ.vst3"       "$HOME/Library/Audio/Plug-Ins/VST3"
+install_one "$A/AU/flatQ.component"    "$HOME/Library/Audio/Plug-Ins/Components"
 killall -9 AudioComponentRegistrar 2>/dev/null || true   # make hosts rescan AUs

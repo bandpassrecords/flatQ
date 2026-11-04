@@ -28,7 +28,7 @@ public:
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return "FlatQ"; }
+    const juce::String getName() const override { return "flatQ"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -49,12 +49,12 @@ public:
     static int numTargets();
     static juce::String targetName (int index);
     static juce::String targetCsvText (int index);
-    static juce::File appDataDir();           // per-user settings folder (Application Support/FlatQ on macOS)
+    static juce::File appDataDir();           // per-user settings folder (Application Support/flatQ on macOS)
     // Measurement from the embedded AutoEq pack -> profile in the library (target: index into targetName(), -1 = Harman by form)
     bool importMeasurement (int measurementIndex, int targetIndex, juce::String& error);
     static int defaultTargetFor (int measurementIndex);
     static juce::File importedProfilesDir();  // same folder as the user library
-    // --- user profile library (Application Support/FlatQ/Profiles): list, import, duplicate, rename, delete
+    // --- user profile library (Application Support/flatQ/Profiles): list, import, duplicate, rename, delete
     static juce::File userProfilesDir();
     static juce::String profileKind (const juce::File& file);   // "headphone" or "speaker"
     static juce::Array<juce::File> userProfileFiles();
@@ -67,7 +67,7 @@ public:
     bool renameProfile (const juce::File& file, const juce::String& newName, juce::String& error);
     bool deleteProfile (const juce::File& file, juce::String& error);
     static juce::File lastProfileFile();
-    // Small persisted app settings (Application Support/FlatQ/FlatQ.settings), shared by all instances
+    // Small persisted app settings (Application Support/flatQ/flatQ.settings), shared by all instances
     static bool getSetting (const juce::String& key, bool defaultValue);
     static void setSetting (const juce::String& key, bool value);      // remembers the last profile used, for new instances
     bool importAutoEq (const juce::File& measurement, const juce::String& targetCsv, const juce::String& targetLabel, juce::String& error);

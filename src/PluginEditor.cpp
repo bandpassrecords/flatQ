@@ -680,14 +680,14 @@ namespace
         bool updating = false;
     };
 
-    // About FlatQ: shown when the logo / wordmark is clicked.
+    // About flatQ: shown when the logo / wordmark is clicked.
     class AboutPanel : public juce::Component
     {
     public:
         AboutPanel()
         {
             addAndMakeVisible (mark);
-            title.setFont (juce::FontOptions (26.f, juce::Font::bold)); title.setText ("FlatQ", juce::dontSendNotification);
+            title.setFont (juce::FontOptions (26.f, juce::Font::bold)); title.setText ("flatQ", juce::dontSendNotification);
             sub.setText ("by BandPass Records  -  version " + juce::String (JucePlugin_VersionString), juce::dontSendNotification);
             sub.setColour (juce::Label::textColourId, theme::dim);
             credits.setText ("Built with JUCE. Equalization method and measurement data from AutoEq (MIT) and the original measurement "
@@ -991,7 +991,7 @@ void AddProfileScreen::paint (juce::Graphics& g)
         g.setColour (dim); g.setFont (juce::FontOptions (12.f));
         g.drawFittedText (desc, in.removeFromTop (60), juce::Justification::topLeft, 4, 1.0f);   // 1.0: wrap, never squash the glyphs
     };
-    card (cardA, "Profile file", "Load a profile from disk: a FlatQ profile (.flatq) or an RME TotalMix profile (.tmreq).");
+    card (cardA, "Profile file", "Load a profile from disk: a flatQ profile (.flatq) or an RME TotalMix profile (.tmreq).");
     card (cardB, "Measurement CSV", "Import your own measurement (a CSV with frequency and raw columns, like the AutoEq ones). You choose the target next.");
 
     g.setColour (dim); g.setFont (juce::FontOptions (13.f));
@@ -1031,7 +1031,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     dryWetA = std::make_unique<SA> (p.apvts, "drywet", dryWet);
     for (auto* l : { &logo, &brand }) l->setInterceptsMouseClicks (false, false);   // clicks go to the About area on top
     logoMark.setInterceptsMouseClicks (false, false);
-    aboutArea.setTooltip ("About FlatQ");
+    aboutArea.setTooltip ("About flatQ");
     aboutArea.onClick = [this] { if (! consumeJustClosed (aboutArea)) showAbout(); };   // a second click closes it instead of reopening
     sidebarVisible = FlatQProcessor::getSetting ("sidebarVisible", true);
     sidebarBtn.barVisible = sidebarVisible;
@@ -1170,7 +1170,7 @@ void FlatQEditor::showMenu()
     m.addItem (5, "Export current profile...", proc.getProfilePath().isNotEmpty());
     m.addSeparator();
     m.addItem (1, "Settings...");
-    m.addItem (2, "About FlatQ");
+    m.addItem (2, "About flatQ");
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&menuDots).withParentComponent (this),
                      [this] (int r) { markClosed (menuDots); if (r == 1) showSettings(); else if (r == 2) showAbout(); else if (r == 3) openAddScreen(); else if (r == 4) saveAsFlow(); else if (r == 5) exportProfileDialog (proc, juce::File (proc.getProfilePath()), exportChooser); });
 }
@@ -1324,7 +1324,7 @@ void FlatQEditor::resized()
     aboutArea.setBounds (head64);
     logoMark.setBounds (head64.removeFromLeft (36).withSizeKeepingCentre (36, 36));
     head64.removeFromLeft (10);
-    logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // FlatQ, with the maker's name under it 
+    logo.setBounds (head64.removeFromTop (42).withTrimmedTop (8));    // flatQ, with the maker's name under it 
     brand.setBounds (head64.removeFromTop (16).withTrimmedLeft (3));
     addButton.setBounds (side.removeFromBottom (72).withSizeKeepingCentre (46, 46));   // a round +, centred at the bottom
     profiles.setBounds (side);

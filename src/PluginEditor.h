@@ -51,7 +51,7 @@ private:
     juce::String kind;
 };
 
-// The FlatQ mark: an EQ curve whose ripples die out into the flat line (same drawing as assets/logo.svg).
+// The flatQ mark: an EQ curve whose ripples die out into the flat line (same drawing as assets/logo.svg).
 class LogoMark : public juce::Component
 {
 public:
@@ -378,7 +378,7 @@ private:
     bool canClick, hover = false;
 };
 
-// Profile library: the user's profiles (saved in Application Support/FlatQ/Profiles) and, if a profile was loaded from
+// Profile library: the user's profiles (saved in Application Support/flatQ/Profiles) and, if a profile was loaded from
 // elsewhere, that one. Each row has a headphone / speaker icon and a three-dots menu
 // (rename / duplicate / delete; built-in and external profiles can only be duplicated).
 class ProfileList : public juce::Component, private juce::ListBoxModel
@@ -513,7 +513,7 @@ private:
     std::unique_ptr<juce::FileChooser> exportChooser;
     void saveAsFlow();
     void openAddScreen() { addScreen.open(); }
-    juce::Label title, subtitle, logo { {}, "FlatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL, brand { {}, "BandPass Records" };
+    juce::Label title, subtitle, logo { {}, "flatQ" }, inL { {}, "In" }, outL { {}, "Out" }, trimL, brand { {}, "BandPass Records" };
     LogoMark logoMark;
     KindIcon kindIcon;
     ClipLight inClip, outClip;

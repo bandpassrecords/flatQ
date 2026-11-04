@@ -1,5 +1,5 @@
 // autoeq_import <measurement.csv> <target.csv> <output.flatq> [--name NAME]
-// Builds a FlatQ profile from an AutoEq measurement and target (correction = target - measurement, both centred at 1 kHz).
+// Builds a flatQ profile from an AutoEq measurement and target (correction = target - measurement, both centred at 1 kHz).
 #include "../src/AutoEqImport.h"
 #include <cstdio>
 #include <fstream>

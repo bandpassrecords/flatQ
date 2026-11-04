@@ -1,4 +1,4 @@
-# FlatQ
+# flatQ
 
 A calibration EQ plugin (VST3, AU and standalone) that applies headphone or speaker correction profiles to your audio output. Put it on the master bus of your DAW.
 
@@ -27,7 +27,7 @@ CI (`.github/workflows/`) builds macOS, Windows and Linux on every push; pushing
 
 ## Using it
 
-1. Insert FlatQ as the last effect on your master / stereo out.
+1. Insert flatQ as the last effect on your master / stereo out.
 2. Pick a profile from the dropdown, or use **Load file...**.
 3. Choose **Low latency (IIR)** for monitoring, or **Linear phase (FIR)** for mixing and mastering. FIR at 16384 taps reports about 170 ms of latency at 48 kHz, which the host compensates for.
 
