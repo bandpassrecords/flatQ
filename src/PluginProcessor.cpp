@@ -511,6 +511,13 @@ void FlatQProcessor::redesign()
                 double r = 0; for (auto& b : d[c].sections) r += flatq::biquadDb (b, fs, f);
                 g.actual[(size_t) c].push_back ((float) r);
             }
+        for (int c = 0; c < 2; ++c)
+            for (float f : g.freqs)
+            {
+                double ph = 0; for (auto& b : d[c].sections) ph += flatq::biquadPhase (b, fs, f);
+                ph = std::remainder (ph, 2 * juce::MathConstants<double>::pi);
+                g.phase[(size_t) c].push_back ((float) (ph * 180.0 / juce::MathConstants<double>::pi));
+            }
         g.maxErrDb = juce::jmax (d[0].maxErrDb, d[1].maxErrDb);
         {
             juce::SpinLock::ScopedLockType sl (iirLock);
@@ -543,6 +550,10 @@ void FlatQProcessor::redesign()
                 std::vector<std::complex<double>> a (N);
                 for (int n = 0; n < taps; ++n) a[(size_t) n] = (double) h[(size_t) n];
                 flatq::fftInPlace (a, false);
+                // phase: take the pure delay out (the linear-phase peak at taps/2, and the profile's own delay), then interpolate
+                const int shift = juce::jlimit (0, taps / 4, (int) std::lround (p->delayMs ((int) src (c)) * fs / 1000.0));
+                const double delay = (mode == MinPhase ? 0 : taps / 2) + shift;
+                auto undelayed = [&] (size_t k) { return a[k] * std::polar (1.0, 2.0 * juce::MathConstants<double>::pi * (double) k * delay / (double) N); };
                 for (float f : g.freqs)
                 {
                     const double pos = (double) f * (double) N / fs;
@@ -550,6 +561,8 @@ void FlatQProcessor::redesign()
                     const double t = pos - (double) i0;
                     const double m = std::abs (a[i0]) * (1.0 - t) + std::abs (a[i0 + 1]) * t;
                     g.actual[(size_t) c].push_back ((float) (20.0 * std::log10 (m + 1e-12)));
+                    const auto z = undelayed (i0) * (1.0 - t) + undelayed (i0 + 1) * t;
+                    g.phase[(size_t) c].push_back ((float) (std::arg (z) * 180.0 / juce::MathConstants<double>::pi));
                 }
             }
         }

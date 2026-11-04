@@ -4,19 +4,51 @@
 
 namespace theme
 {
-    // Neutral dark greys only (no blue anywhere); one muted green accent, plus amber / orange / pink for the curves.
-    const juce::Colour bg       { 0xff121212 };   // window / graph
-    const juce::Colour panel    { 0xff1b1b1b };   // header, status row, popups
-    const juce::Colour sidebar  { 0xff161616 };
-    const juce::Colour divider  { 0xff2b2b2b };
-    const juce::Colour track    { 0xff6b6b6b };   // unfilled part of sliders: clearly lighter than the panels so the groove reads
-    const juce::Colour text     { 0xffe8e8e8 };
-    const juce::Colour dim      { 0xff8d8d8d };
-    const juce::Colour accent   { 0xff46c47c };   // selection, active controls, the EQ curve, meters
-    const juce::Colour good     { 0xffcfcfcf };   // the flat target line
-    const juce::Colour result   { 0xfff472b6 };   // achieved response
-    const juce::Colour chanL    { 0xff9be15d };
-    const juce::Colour chanR    { 0xfff4a259 };
+    // Neutral greys only (no blue anywhere); one green accent, plus amber / orange / pink for the curves. Dark by default;
+    // setLight() switches the palette, and the editor repaints.
+    inline bool light = false;
+    inline juce::Colour bg       { 0xff121212 };   // window / graph
+    inline juce::Colour panel    { 0xff1b1b1b };   // header, status row, popups
+    inline juce::Colour sidebar  { 0xff161616 };
+    inline juce::Colour divider  { 0xff2b2b2b };
+    inline juce::Colour track    { 0xff6b6b6b };   // unfilled part of sliders: clearly lighter than the panels so the groove reads
+    inline juce::Colour text     { 0xffe8e8e8 };
+    inline juce::Colour dim      { 0xff8d8d8d };
+    inline juce::Colour accent   { 0xff46c47c };   // selection, active controls, the EQ curve, meters
+    inline juce::Colour good     { 0xffcfcfcf };   // the flat target line
+    inline juce::Colour result   { 0xfff472b6 };   // achieved response
+    inline juce::Colour chanL    { 0xff9be15d };
+    inline juce::Colour chanR    { 0xfff4a259 };
+    inline juce::Colour measuredCurve { 0xfffbbf24 };
+    inline juce::Colour phaseCol { 0xffb794f6 };   // the phase curve
+    inline juce::Colour control  { 0xff262626 };   // buttons, fields, hover fills
+    inline juce::Colour gridZero { 0xff4a4a4a };   // the 0 dB line
+    inline juce::Colour gridMajor{ 0xff343434 };
+    inline juce::Colour thumb    { 0xff5a5a5a };   // scroll bars
+    inline const juce::Colour onAccent { 0xff0d2418 };   // text and icons on a green fill, in both themes
+
+    inline void setLight (bool on)
+    {
+        light = on;
+        if (on)
+        {
+            bg = juce::Colour (0xfff5f5f5);      panel = juce::Colour (0xffffffff);   sidebar = juce::Colour (0xffebebeb);
+            divider = juce::Colour (0xffd6d6d6); track = juce::Colour (0xffb9b9b9);   text = juce::Colour (0xff1c1c1c);
+            dim = juce::Colour (0xff6a6a6a);     accent = juce::Colour (0xff2e9e5b);  good = juce::Colour (0xff555555);
+            result = juce::Colour (0xffd6307f);  chanL = juce::Colour (0xff5b9f1c);   chanR = juce::Colour (0xffd9772a);
+            measuredCurve = juce::Colour (0xffc58a06); phaseCol = juce::Colour (0xff8a5cf0); control = juce::Colour (0xffe3e3e3); gridZero = juce::Colour (0xffb0b0b0);
+            gridMajor = juce::Colour (0xffcdcdcd); thumb = juce::Colour (0xffb5b5b5);
+        }
+        else
+        {
+            bg = juce::Colour (0xff121212);      panel = juce::Colour (0xff1b1b1b);   sidebar = juce::Colour (0xff161616);
+            divider = juce::Colour (0xff2b2b2b); track = juce::Colour (0xff6b6b6b);   text = juce::Colour (0xffe8e8e8);
+            dim = juce::Colour (0xff8d8d8d);     accent = juce::Colour (0xff46c47c);  good = juce::Colour (0xffcfcfcf);
+            result = juce::Colour (0xfff472b6);  chanL = juce::Colour (0xff9be15d);   chanR = juce::Colour (0xfff4a259);
+            measuredCurve = juce::Colour (0xfffbbf24); phaseCol = juce::Colour (0xffb794f6); control = theme::control; gridZero = juce::Colour (0xff4a4a4a);
+            gridMajor = juce::Colour (0xff343434); thumb = juce::Colour (0xff5a5a5a);
+        }
+    }
 }
 
 // Headphone / speaker glyphs (the profile type), drawn in a square.
@@ -75,6 +107,7 @@ class FlatQLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
     FlatQLookAndFeel();
+    void applyColours();   // from the current theme (light or dark)
     void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool, bool) override;
     // Slim groove with a solid accent fill; a slider with the "bipolar" property set fills from 0 instead of from the end.
     juce::Slider::SliderLayout getSliderLayout (juce::Slider&) override;
@@ -102,8 +135,8 @@ private:
     float xOf (float f) const;
     GraphData data;
     float bassLimit = 0.f;
-    bool dragging = false, showTarget = false, showMeasured = false, showEq = true, showResult = false, showLimit = false;   // only the EQ curve by default
-    juce::Rectangle<int> legendHit[5];
+    bool dragging = false, showTarget = false, showMeasured = false, showEq = true, showResult = false, showPhase = false, showLimit = false;   // only the EQ curve by default
+    juce::Rectangle<int> legendHit[6];
 };
 
 // Stereo peak meter pair.
@@ -126,7 +159,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (theme::control); g.fillRoundedRectangle (r, 6.f); }
         const auto c = r.getCentre(); const float rad = 8.f;
         const bool on = getToggleState();
         g.setColour (on ? theme::accent : (over ? theme::text : theme::dim));
@@ -176,7 +209,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (theme::control); g.fillRoundedRectangle (r, 6.f); }
         const auto c = r.getCentre(); const bool muted = getToggleState();
         const auto col = muted ? juce::Colour (0xffef4444) : (over ? theme::text : theme::dim);
         juce::Path body; body.addTriangle (c.x - 2.f, c.y - 6.f, c.x - 2.f, c.y + 6.f, c.x - 9.f, c.y);
@@ -197,7 +230,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (theme::control); g.fillRoundedRectangle (r, 6.f); }
         const auto c = r.getCentre(); const bool on = getToggleState();
         g.setColour (on ? theme::accent : (over ? theme::text : theme::dim));
         auto arrow = [&] (float y, float dir)   // dir +1 points right, -1 points left
@@ -220,17 +253,21 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
         const bool enabled = ! getToggleState();
-        const auto col = enabled ? theme::accent : theme::dim;
-        const juce::Point<float> c (r.getX() + 24.f, r.getCentreY());
-        juce::Path p; p.addCentredArc (c.x, c.y, 9.f, 9.f, 0.f, 0.55f, juce::MathConstants<float>::twoPi - 0.55f, true);
-        p.startNewSubPath (c.x, c.y - 12.f); p.lineTo (c.x, c.y - 1.f);
+        // enabled: green button with dark content; disabled: the normal background
+        if (enabled) { g.setColour (over ? theme::accent.brighter (0.1f) : theme::accent); g.fillRoundedRectangle (r, 6.f); }
+        else if (over) { g.setColour (theme::control); g.fillRoundedRectangle (r, 6.f); }
+        const auto ink = juce::Colour (0xff0d2418);
+        const auto col = enabled ? ink : theme::dim;
+        const juce::Point<float> c (r.getX() + 19.f, r.getCentreY());
+        juce::Path p; p.addCentredArc (c.x, c.y, 8.f, 8.f, 0.f, 0.55f, juce::MathConstants<float>::twoPi - 0.55f, true);
+        p.startNewSubPath (c.x, c.y - 11.f); p.lineTo (c.x, c.y - 1.f);
         g.setColour (col); g.strokePath (p, juce::PathStrokeType (2.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        g.setFont (juce::FontOptions (12.f)); g.setColour (theme::dim);
-        g.drawText ("Calibration", (int) r.getX() + 46, (int) r.getCentreY() - 16, 90, 16, juce::Justification::centredLeft);
-        g.setFont (juce::FontOptions (13.f, juce::Font::bold)); g.setColour (enabled ? theme::text : theme::dim);
-        g.drawText (enabled ? "Enabled" : "Disabled", (int) r.getX() + 46, (int) r.getCentreY(), 90, 16, juce::Justification::centredLeft);
+        const int tx = (int) r.getX() + 36, tw = (int) r.getWidth() - 38;
+        g.setFont (juce::FontOptions (11.5f)); g.setColour (enabled ? ink.withAlpha (0.8f) : theme::dim);
+        g.drawText ("Calibration", tx, (int) r.getCentreY() - 16, tw, 16, juce::Justification::centredLeft);
+        g.setFont (juce::FontOptions (13.f, juce::Font::bold)); g.setColour (enabled ? ink : theme::dim);
+        g.drawText (enabled ? "Enabled" : "Disabled", tx, (int) r.getCentreY(), tw, 16, juce::Justification::centredLeft);
     }
 };
 
@@ -250,7 +287,7 @@ public:
         {
             auto* b = buttons.add (new juce::TextButton (x.button));
             b->setColour (juce::TextButton::buttonColourId, theme::accent);
-            b->setColour (juce::TextButton::textColourOffId, theme::bg);
+            b->setColour (juce::TextButton::textColourOffId, theme::onAccent);
             b->onClick = x.action;
             addAndMakeVisible (b);
         }
@@ -301,7 +338,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (theme::control); g.fillRoundedRectangle (r, 6.f); }
         g.setColour (over ? theme::text : theme::dim);
         for (int i = -1; i <= 1; ++i) g.fillEllipse (r.getCentreX() - 2.f, r.getCentreY() + (float) i * 6.f - 2.f, 4.f, 4.f);
     }
@@ -316,7 +353,7 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool) override
     {
         auto r = getLocalBounds().toFloat();
-        if (over) { g.setColour (juce::Colour (0xff242424)); g.fillRoundedRectangle (r, 6.f); }
+        if (over) { g.setColour (theme::control); g.fillRoundedRectangle (r, 6.f); }
         auto box = r.withSizeKeepingCentre (18.f, 14.f);
         g.setColour (over ? theme::text : theme::dim);
         g.drawRoundedRectangle (box, 2.5f, 1.5f);
@@ -333,11 +370,10 @@ public:
     void setClipped (bool c) { if (c != clipped) { clipped = c; repaint(); } }
     void paint (juce::Graphics& g) override
     {
-        auto r = getLocalBounds().toFloat().reduced (0.5f);
-        g.setColour (clipped ? juce::Colour (0xffef4444) : juce::Colour (0xff262626)); g.fillRoundedRectangle (r, 3.f);
-        g.setColour (clipped ? juce::Colour (0xffef4444) : theme::divider); g.drawRoundedRectangle (r, 3.f, 1.f);
-        g.setColour (clipped ? juce::Colours::white : theme::dim.withAlpha (0.6f)); g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
-        g.drawText ("CLIP", getLocalBounds(), juce::Justification::centred);
+        // a slim bar: dark while the level is fine, red from the first clip until it is clicked
+        auto r = getLocalBounds().toFloat().withSizeKeepingCentre ((float) getWidth() - 2.f, 5.f);
+        g.setColour (clipped ? juce::Colour (0xffef4444) : theme::control.interpolatedWith (theme::divider, 0.5f)); g.fillRoundedRectangle (r, 2.5f);
+        if (! clipped) { g.setColour (theme::divider); g.drawRoundedRectangle (r, 2.5f, 1.f); }
     }
     void mouseUp (const juce::MouseEvent& e) override { if (contains (e.getPosition()) && onReset) onReset(); }
     void mouseEnter (const juce::MouseEvent&) override { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
@@ -353,10 +389,10 @@ public:
     void paintButton (juce::Graphics& g, bool over, bool down) override
     {
         auto r = getLocalBounds().toFloat().reduced (1.f);
-        g.setColour (over ? theme::accent : juce::Colour (0xff262626)); g.fillEllipse (r);
-        g.setColour (over ? theme::accent : theme::divider.brighter (0.25f)); g.drawEllipse (r, 1.2f);
+        g.setColour (over ? theme::accent : (theme::light ? theme::panel : theme::control)); g.fillEllipse (r);
+        g.setColour (over ? theme::accent : (theme::light ? theme::track : theme::divider.brighter (0.25f))); g.drawEllipse (r, 1.2f);
         const auto c = r.getCentre(); const float arm = r.getWidth() * (down ? 0.19f : 0.22f);
-        g.setColour (over ? theme::bg : theme::text);
+        g.setColour (over ? theme::onAccent : theme::text);
         g.drawLine (c.x - arm, c.y, c.x + arm, c.y, 2.2f);
         g.drawLine (c.x, c.y - arm, c.x, c.y + arm, 2.2f);
     }
@@ -454,6 +490,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
+    void applyTheme();   // the light / dark switch: colours set when the screen was built
 private:
     void updateSearch();
     void pickMeasurement (int index);
@@ -539,11 +576,12 @@ private:
     int lastVersion = -1;
     juce::String lastProfileKey;
     double lastPreamp = 0;
-    static constexpr int stripW = 150, headerH = 72, statusH = 56;
+    static constexpr int stripW = 116, headerH = 72, statusH = 56;
     bool sidebarVisible = true;
     int sidebarW() const { return sidebarVisible ? 230 : 0; }   // the left bar can be hidden
     SidebarToggle sidebarBtn;
     void applySidebarVisibility();
+    void applyTheme();   // light / dark: look and feel, labels with their own colour, and a full repaint
     using BA = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using SA = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<BA> bypassA, monoA, muteA, swapA;

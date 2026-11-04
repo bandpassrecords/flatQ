@@ -8,6 +8,7 @@ struct GraphData
 {
     std::vector<float> freqs, ceiling;
     std::array<std::vector<float>, 2> target, actual;   // dB, preamp included: designed EQ curve / achieved filter response
+    std::array<std::vector<float>, 2> phase;            // degrees, -180..180, of the filter without its pure delay (linear phase reads 0)
     std::array<std::vector<float>, 2> measured;         // dB, no preamp: inverse of the raw profile = the response the profile measured
     bool hasCeiling = false, perChannel = false;
     std::array<std::array<float, 31>, 2> bandBase {};   // target at flatq::manualFreqs() per channel, before manual offsets and preamp
@@ -127,7 +128,7 @@ private:
 
     // Dry path used when bypassed (manual bypass or offline export): delayed by the reported latency so the
     // host's latency compensation stays correct.
-    static constexpr int kMaxLatency = 8192;
+    static constexpr int kMaxLatency = 32768;   // linear phase at 65536 taps reports taps / 2 samples
     std::array<std::vector<float>, 2> dryBuf;
     std::array<int, 2> dryPos {};
     std::atomic<int> latencyNow { 0 };

@@ -32,7 +32,9 @@ namespace
 }
 
 // ------------------------------------------------------------------------------------------------ look and feel
-FlatQLookAndFeel::FlatQLookAndFeel()
+FlatQLookAndFeel::FlatQLookAndFeel() { applyColours(); }
+
+void FlatQLookAndFeel::applyColours()
 {
     using namespace theme;
     setColour (juce::ResizableWindow::backgroundColourId, bg);
@@ -43,7 +45,7 @@ FlatQLookAndFeel::FlatQLookAndFeel()
     setColour (juce::Slider::backgroundColourId, track);
     setColour (juce::Slider::textBoxTextColourId, text);
     setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff262626));
+    setColour (juce::ComboBox::backgroundColourId, theme::control);
     setColour (juce::ComboBox::outlineColourId, divider);
     setColour (juce::ComboBox::textColourId, text);
     setColour (juce::ComboBox::arrowColourId, dim);
@@ -54,7 +56,7 @@ FlatQLookAndFeel::FlatQLookAndFeel()
     setColour (juce::BubbleComponent::backgroundColourId, panel);
     setColour (juce::BubbleComponent::outlineColourId, divider);
     setColour (juce::ListBox::backgroundColourId, sidebar);
-    setColour (juce::ScrollBar::thumbColourId, juce::Colour (0xff5a5a5a));   // the default is blue
+    setColour (juce::ScrollBar::thumbColourId, theme::thumb);   // the default is blue
     setColour (juce::ScrollBar::trackColourId, juce::Colours::transparentBlack);
     setColour (juce::TextEditor::highlightColourId, accent.withAlpha (0.35f));
     setColour (juce::CaretComponent::caretColourId, accent);
@@ -62,10 +64,12 @@ FlatQLookAndFeel::FlatQLookAndFeel()
     setColour (juce::ToggleButton::textColourId, text);
     setColour (juce::ToggleButton::tickColourId, accent);
     setColour (juce::ToggleButton::tickDisabledColourId, dim);
-    setColour (juce::TextButton::buttonColourId, juce::Colour (0xff262626));
+    setColour (juce::TextButton::buttonColourId, theme::control);
     setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffef4444));
     setColour (juce::TextButton::textColourOffId, text);
     setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+    setColour (juce::TextEditor::backgroundColourId, control);
+    setColour (juce::TextEditor::textColourId, text);
     setColour (juce::TooltipWindow::backgroundColourId, panel);
     setColour (juce::TooltipWindow::textColourId, text);
     setColour (juce::TooltipWindow::outlineColourId, divider);
@@ -156,19 +160,19 @@ void ResponseGraph::paint (juce::Graphics& g)
 
     // legend: Target = the flat line we aim for; Measured = inverse of the profile (what the speaker/headphone does);
     // Calibration = the filter we apply; Result = Measured + Calibration, which should land on the flat target
-    const juce::Colour measuredCol (0xfffbbf24), eqCol = accent;
+    const juce::Colour measuredCol = measuredCurve, eqCol = accent;
     {
         struct Item { const char* name; bool* on; bool visible; juce::Colour col; };
-        Item items[5] = { { "Target (flat)", &showTarget, true, good }, { "Measured", &showMeasured, true, measuredCol },
+        Item items[6] = { { "Target (flat)", &showTarget, true, good }, { "Measured", &showMeasured, true, measuredCol },
                           { "Calibration", &showEq, true, eqCol }, { "Result", &showResult, true, result },
-                          { "Boost limit", &showLimit, data.hasCeiling, dim } };
+                          { "Phase", &showPhase, true, phaseCol }, { "Boost limit", &showLimit, data.hasCeiling, dim } };
         int x = 14;
         g.setFont (juce::FontOptions (13.f));
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < 6; ++i)
         {
             legendHit[i] = {};
             if (! items[i].visible) continue;
-            const bool lr = data.perChannel && i > 0 && i < 4;   // L / R dots on the curve entries
+            const bool lr = data.perChannel && i > 0 && i < 5;   // L / R dots on the curve entries
             const int w = 34 + (lr ? 10 : 0) + 7 * (int) std::strlen (items[i].name);
             legendHit[i] = { x, 6, w, 24 };
             const float a = *items[i].on ? 1.f : 0.35f;
@@ -181,7 +185,7 @@ void ResponseGraph::paint (juce::Graphics& g)
                 g.setFont (juce::FontOptions (13.f));
             };
             float cx = (float) x + 6.f;
-            if (i == 4) { g.setColour (dim.withAlpha (a)); g.drawHorizontalLine (18, (float) x, (float) x + 12.f); cx += 6.f; }
+            if (i == 5) { g.setColour (dim.withAlpha (a)); g.drawHorizontalLine (18, (float) x, (float) x + 12.f); cx += 6.f; }
             else if (lr) { cx += 2.f; letterDot (cx, items[i].col.brighter (0.5f), "L"); letterDot (cx + 18.f, items[i].col, "R"); cx += 18.f; }
             else dot (cx, items[i].col);
             g.setColour (text.withAlpha (a));
@@ -194,7 +198,7 @@ void ResponseGraph::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (11.f));
     for (float db = -range; db <= range + 0.1f; db += 6.f)
     {
-        g.setColour (db == 0 ? juce::Colour (0xff4a4a4a) : divider);
+        g.setColour (db == 0 ? theme::gridZero : divider);
         g.drawHorizontalLine ((int) yOf (db), plot.getX(), plot.getRight());
         g.setColour (dim);
         g.drawText ((db > 0 ? "+" : "") + juce::String ((int) db) + "dB", (int) plot.getRight() + 6, (int) yOf (db) - 7, 48, 14, juce::Justification::centredLeft);
@@ -203,7 +207,7 @@ void ResponseGraph::paint (juce::Graphics& g)
                      1000.f, 2000.f, 3000.f, 4000.f, 5000.f, 6000.f, 7000.f, 8000.f, 9000.f, 10000.f, 20000.f })
     {
         const bool major = f == 20.f || f == 100.f || f == 1000.f || f == 10000.f || f == 20000.f;
-        g.setColour (major ? juce::Colour (0xff343434) : divider.withAlpha (0.6f));
+        g.setColour (major ? theme::gridMajor : divider.withAlpha (0.6f));
         g.drawVerticalLine ((int) xOf (f), plot.getY(), plot.getBottom());
     }
     for (float f : { 20.f, 50.f, 100.f, 200.f, 500.f, 1000.f, 2000.f, 5000.f, 10000.f, 20000.f })
@@ -280,8 +284,25 @@ void ResponseGraph::paint (juce::Graphics& g)
             for (size_t i = 0; i < res.size(); ++i) res[i] = data.measured[(size_t) c][i] + data.actual[(size_t) c][i] - (float) data.preampDb;
             strokeCurve (res, shade (result, c), 2.2f);
         }
+        if (showPhase && data.phase[(size_t) c].size() == data.freqs.size())
+        {
+            juce::Path p;   // +-180 degrees span the same height as +-24 dB; the line breaks where the phase wraps around
+            const auto& ph = data.phase[(size_t) c];
+            for (size_t i = 0; i < ph.size(); ++i)
+            {
+                const float x = xOf (data.freqs[i]), y = yOf (ph[i] / 180.f * range);
+                if (i == 0 || std::abs (ph[i] - ph[i - 1]) > 180.f) p.startNewSubPath (x, y); else p.lineTo (x, y);
+            }
+            g.setColour (shade (phaseCol, c)); g.strokePath (p, juce::PathStrokeType (1.4f));
+        }
     }
     g.restoreState();
+    if (showPhase)   // degree scale, inside the right edge of the plot
+    {
+        g.setFont (juce::FontOptions (10.f)); g.setColour (phaseCol);
+        for (int deg : { -180, -90, 0, 90, 180 })
+            g.drawText ((deg > 0 ? "+" : "") + juce::String (deg) + juce::String::charToString (0x00b0), (int) plot.getRight() - 46, (int) yOf ((float) deg / 180.f * range) - (deg == 180 ? 0 : deg == -180 ? 12 : 6), 42, 12, juce::Justification::centredRight);
+    }
 }
 
 void ResponseGraph::mouseMove (const juce::MouseEvent& e)
@@ -293,8 +314,8 @@ void ResponseGraph::mouseMove (const juce::MouseEvent& e)
 
 void ResponseGraph::mouseDown (const juce::MouseEvent& e)
 {
-    bool* flags[5] = { &showTarget, &showMeasured, &showEq, &showResult, &showLimit };
-    for (int i = 0; i < 5; ++i)
+    bool* flags[6] = { &showTarget, &showMeasured, &showEq, &showResult, &showPhase, &showLimit };
+    for (int i = 0; i < 6; ++i)
         if (legendHit[i].contains (e.getPosition())) { *flags[i] = ! *flags[i]; repaint(); return; }
     const float hx = xOf (bassLimit > 0 ? bassLimit : 20.f);
     if (std::abs ((float) e.x - hx) < 9.f && plotArea().contains (e.position))
@@ -349,7 +370,7 @@ void LevelMeter::paint (juce::Graphics& g)
 void StatusItem::paint (juce::Graphics& g)
 {
     using namespace theme;
-    if (hover && canClick) { g.setColour (juce::Colour (0xff232323)); g.fillRect (getLocalBounds()); }
+    if (hover && canClick) { g.setColour (theme::control); g.fillRect (getLocalBounds()); }
     g.setColour (divider); g.drawVerticalLine (0, 10.f, (float) getHeight() - 10.f);
     g.setColour (dim); g.setFont (juce::FontOptions (12.f));
     g.drawText (label, 14, 10, getWidth() - 20, 16, juce::Justification::centredLeft);
@@ -579,7 +600,7 @@ namespace
                 proc.setManualLinked (link.getToggleState());
                 ch = 0; chL.setToggleState (true, juce::dontSendNotification); updateChannelUi(); refresh (true);
             };
-            for (auto* b : { &chL, &chR }) { b->setClickingTogglesState (true); b->setRadioGroupId (41); b->setColour (juce::TextButton::buttonOnColourId, theme::accent); b->setColour (juce::TextButton::textColourOnId, theme::bg); addChildComponent (b); }
+            for (auto* b : { &chL, &chR }) { b->setClickingTogglesState (true); b->setRadioGroupId (41); b->setColour (juce::TextButton::buttonOnColourId, theme::accent); b->setColour (juce::TextButton::textColourOnId, theme::onAccent); addChildComponent (b); }
             chL.setToggleState (true, juce::dontSendNotification);
             chL.onClick = [this] { ch = 0; refresh (true); };
             chR.onClick = [this] { ch = 1; refresh (true); };
@@ -622,7 +643,7 @@ namespace
             for (int db : { 18, 12, 6, 0, -6, -12, -18 })
             {
                 const float y = (float) sliderTop + 6.f + (float) (sliderH - 12) * (18.f - (float) db) / 36.f;
-                g.setColour (db == 0 ? juce::Colour (0xff4a4a4a) : theme::divider); g.drawHorizontalLine ((int) y, 40.f, (float) getWidth() - 10.f);
+                g.setColour (db == 0 ? theme::gridZero : theme::divider); g.drawHorizontalLine ((int) y, 40.f, (float) getWidth() - 10.f);
                 g.setColour (theme::dim); g.drawText ((db > 0 ? "+" : "") + juce::String (db), 4, (int) y - 5, 32, 10, juce::Justification::centredRight);
             }
         }
@@ -723,8 +744,8 @@ namespace
     class SettingsPanel : public juce::Component
     {
     public:
-        explicit SettingsPanel (juce::AudioProcessorValueTreeState& apvts, bool runsAsPlugin, std::function<void (bool)> tooltipsChanged)
-            : onTooltips (std::move (tooltipsChanged)), showSkip (runsAsPlugin)
+        explicit SettingsPanel (juce::AudioProcessorValueTreeState& apvts, bool runsAsPlugin, std::function<void (bool)> tooltipsChanged, std::function<void()> themeChanged)
+            : onTooltips (std::move (tooltipsChanged)), onTheme (std::move (themeChanged)), showSkip (runsAsPlugin)
         {
             loadLast.setButtonText ("Load the last used profile on start");
             loadLast.setToggleState (FlatQProcessor::getSetting ("loadLastProfile", true), juce::dontSendNotification);
@@ -732,6 +753,9 @@ namespace
             tips.setButtonText ("Show tooltips");
             tips.setToggleState (FlatQProcessor::getSetting ("tooltips", true), juce::dontSendNotification);
             tips.onClick = [this] { FlatQProcessor::setSetting ("tooltips", tips.getToggleState()); if (onTooltips) onTooltips (tips.getToggleState()); };
+            light.setButtonText ("Light theme");
+            light.setToggleState (FlatQProcessor::getSetting ("lightTheme", false), juce::dontSendNotification);
+            light.onClick = [this] { FlatQProcessor::setSetting ("lightTheme", light.getToggleState()); if (onTheme) onTheme(); };
             skip.setButtonText ("Skip on offline export");
             skip.setTooltip ("Pass the audio through untouched while the host renders offline (e.g. Export Audio Mixdown)");
             skipA = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (apvts, "bypassexport", skip);
@@ -739,10 +763,10 @@ namespace
             profilesBtn.onClick = [] { FlatQProcessor::userProfilesDir().createDirectory(); FlatQProcessor::userProfilesDir().revealToUser(); };
             dataBtn.setButtonText ("Open settings folder");
             dataBtn.onClick = [] { FlatQProcessor::appDataDir().createDirectory(); FlatQProcessor::appDataDir().revealToUser(); };
-            for (auto* c : std::initializer_list<juce::Component*> { &heading, &loadLast, &tips, &profilesBtn, &dataBtn }) addAndMakeVisible (c);
+            for (auto* c : std::initializer_list<juce::Component*> { &heading, &loadLast, &tips, &light, &profilesBtn, &dataBtn }) addAndMakeVisible (c);
             if (showSkip) addAndMakeVisible (skip);   // offline rendering only exists inside a host, so the standalone app does not show it
             heading.setText ("Settings", juce::dontSendNotification); heading.setFont (juce::FontOptions (16.f, juce::Font::bold));
-            setSize (380, showSkip ? 244 : 214);
+            setSize (380, showSkip ? 274 : 244);
         }
         void paint (juce::Graphics& g) override { g.fillAll (theme::panel); }
         void resized() override
@@ -751,6 +775,7 @@ namespace
             heading.setBounds (r.removeFromTop (28));
             loadLast.setBounds (r.removeFromTop (30));
             tips.setBounds (r.removeFromTop (30));
+            light.setBounds (r.removeFromTop (30));
             if (showSkip) skip.setBounds (r.removeFromTop (30));
             r.removeFromTop (8);
             profilesBtn.setBounds (r.removeFromTop (32)); r.removeFromTop (8);
@@ -758,9 +783,10 @@ namespace
         }
     private:
         std::function<void (bool)> onTooltips;
+        std::function<void()> onTheme;
         bool showSkip;
         juce::Label heading;
-        juce::ToggleButton loadLast, tips, skip;
+        juce::ToggleButton loadLast, tips, light, skip;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> skipA;
         juce::TextButton profilesBtn, dataBtn;
     };
@@ -773,6 +799,19 @@ namespace
 }
 
 // ------------------------------------------------------------------------------------------------ add-profile screen
+void AddProfileScreen::applyTheme()
+{
+    for (auto* l : { &brandL, &formL, &targetL, &resultsInfo }) l->setColour (juce::Label::textColourId, theme::dim);
+    searchBox.setColour (juce::TextEditor::backgroundColourId, theme::control);
+    searchBox.setColour (juce::TextEditor::textColourId, theme::text);
+    searchBox.setColour (juce::TextEditor::outlineColourId, theme::divider);
+    searchBox.setColour (juce::TextEditor::highlightColourId, theme::accent.withAlpha (0.35f));
+    searchBox.setColour (juce::TextEditor::highlightedTextColourId, theme::text);
+    searchBox.setColour (juce::TextEditor::focusedOutlineColourId, theme::accent);
+    for (auto* b : { &loadFile, &importCsv }) { b->setColour (juce::TextButton::buttonColourId, theme::accent); b->setColour (juce::TextButton::textColourOffId, theme::onAccent); }
+    repaint();
+}
+
 AddProfileScreen::AddProfileScreen (FlatQProcessor& p) : proc (p)
 {
     setOpaque (true);
@@ -811,7 +850,7 @@ AddProfileScreen::AddProfileScreen (FlatQProcessor& p) : proc (p)
     targetPick.setSelectedId (1, juce::dontSendNotification);
 
     searchBox.setTextToShowWhenEmpty ("Search by name, brand or source", theme::dim);
-    searchBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff262626));
+    searchBox.setColour (juce::TextEditor::backgroundColourId, theme::control);
     searchBox.setColour (juce::TextEditor::textColourId, theme::text);
     searchBox.setColour (juce::TextEditor::outlineColourId, theme::divider);
     searchBox.setColour (juce::TextEditor::highlightColourId, theme::accent.withAlpha (0.35f));
@@ -829,7 +868,7 @@ AddProfileScreen::AddProfileScreen (FlatQProcessor& p) : proc (p)
     back.onClick = [this] { if (onClose) onClose(); };
     loadFile.onClick = [this] { chooseProfileFile(); };
     importCsv.onClick = [this] { chooseCsv(); };
-    for (auto* b : { &loadFile, &importCsv }) { b->setColour (juce::TextButton::buttonColourId, theme::accent); b->setColour (juce::TextButton::textColourOffId, theme::bg); }
+    for (auto* b : { &loadFile, &importCsv }) { b->setColour (juce::TextButton::buttonColourId, theme::accent); b->setColour (juce::TextButton::textColourOffId, theme::onAccent); }
 
     targetPick.setTooltip ("The curve the correction aims for. Auto = Harman over-ear 2018 for over-ear, Harman in-ear 2019 for in-ear. Not used by finished AutoEq results.");
 
@@ -1011,6 +1050,8 @@ void AddProfileScreen::paint (juce::Graphics& g)
 // ------------------------------------------------------------------------------------------------ editor
 FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
+    theme::setLight (FlatQProcessor::getSetting ("lightTheme", false));
+    laf.applyColours();
     setLookAndFeel (&laf);
     for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &addButton, &title, &subtitle, &kindIcon, &inClip, &outClip, &logoMark, &logo, &brand, &inL, &outL, &trimL,
                                                               &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &sidebarBtn, &mono, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
@@ -1165,11 +1206,27 @@ void FlatQEditor::saveAsFlow()
     });
 }
 
+void FlatQEditor::applyTheme()
+{
+    theme::setLight (FlatQProcessor::getSetting ("lightTheme", false));
+    laf.applyColours();
+    for (auto* l : { &brand, &subtitle, &inL, &outL, &dryWetL }) l->setColour (juce::Label::textColourId, theme::dim);
+    addScreen.applyTheme();
+    sendLookAndFeelChange();
+    if (callout != nullptr)   // the open panel (Settings) is a window of its own: redraw its cached background and arrow too
+    {
+        callout->sendLookAndFeelChange();
+        callout->setArrowSize (16.f);   // rebuilds the cached call-out outline
+        callout->repaint();
+    }
+    repaint();
+}
+
 void FlatQEditor::showAbout() { showPanel (std::make_unique<AboutPanel>(), aboutArea); }
 
 void FlatQEditor::showSettings()
 {
-    showPanel (std::make_unique<SettingsPanel> (proc.apvts, proc.wrapperType != juce::AudioProcessor::wrapperType_Standalone, [this] (bool on) { tooltipWindow.setMillisecondsBeforeTipAppears (on ? 450 : 100000000); }), menuDots);
+    showPanel (std::make_unique<SettingsPanel> (proc.apvts, proc.wrapperType != juce::AudioProcessor::wrapperType_Standalone, [this] (bool on) { tooltipWindow.setMillisecondsBeforeTipAppears (on ? 450 : 100000000); }, [this] { applyTheme(); }), menuDots);
 }
 
 void FlatQEditor::showMenu()
@@ -1314,12 +1371,12 @@ void FlatQEditor::paint (juce::Graphics& g)
     g.fillAll (bg);
     g.setColour (sidebar); g.fillRect (0, 0, sidebarW(), getHeight());
     g.setColour (panel); g.fillRect (sidebarW(), getHeight() - statusH, getWidth() - sidebarW() - stripW, statusH);
-    g.fillRect (sidebarW(), 0, getWidth() - sidebarW() - stripW, headerH);
-    g.setColour (sidebar); g.fillRect (getWidth() - stripW, 0, stripW, getHeight());
+    g.fillRect (sidebarW(), 0, getWidth() - sidebarW(), headerH);   // the header runs over the level strip
+    g.setColour (sidebar); g.fillRect (getWidth() - stripW, headerH, stripW, getHeight() - headerH);
     g.setColour (divider);
     if (sidebarVisible) g.drawVerticalLine (sidebarW() - 1, 0.f, (float) getHeight());
-    g.drawVerticalLine (getWidth() - stripW, 0.f, (float) getHeight());
-    g.drawHorizontalLine (headerH - 1, (float) sidebarW(), (float) (getWidth() - stripW));
+    g.drawVerticalLine (getWidth() - stripW, (float) headerH, (float) getHeight());
+    g.drawHorizontalLine (headerH - 1, (float) sidebarW(), (float) getWidth());
     g.drawHorizontalLine (getHeight() - statusH, (float) sidebarW(), (float) (getWidth() - stripW));
     if (sidebarVisible) g.drawHorizontalLine (64, 0.f, (float) sidebarW());
 }
@@ -1328,7 +1385,6 @@ void FlatQEditor::resized()
 {
     auto r = getLocalBounds();
     auto side = r.removeFromLeft (sidebarW());
-    auto strip = r.removeFromRight (stripW);
 
     auto head64 = side.removeFromTop (64).reduced (16, 0);
     aboutArea.setBounds (head64);
@@ -1341,6 +1397,7 @@ void FlatQEditor::resized()
     addScreen.setBounds (getLocalBounds());
 
     auto head = r.removeFromTop (headerH);
+    auto strip = r.removeFromRight (stripW);
     menuDots.setBounds (juce::Rectangle<int> (head.getRight() - 42, head.getY() + 12, 30, 30));   // top right
     sidebarBtn.setBounds (menuDots.getBounds().translated (-36, 0));
     saveAsBtn.setBounds (juce::Rectangle<int> (sidebarBtn.getX() - 172, sidebarBtn.getY() + 1, 164, 28));                               // hide / show the left bar, left of the dots
@@ -1361,17 +1418,17 @@ void FlatQEditor::resized()
     notices.setBounds (r.withSizeKeepingCentre (NoticeStack::kWidth, notices.preferredHeight()));
 
     // right strip: In / Out meters and the output trim fader
-    strip.removeFromTop (headerH - 26);   // (the "skip on export" switch now lives in Settings)
+    strip.removeFromTop (10);
     auto labels = strip.removeFromTop (22);
-    bypass.setBounds (strip.removeFromBottom (60).reduced (10, 8));
+    bypass.setBounds (strip.removeFromBottom (60).reduced (8, 8));
     auto icons = strip.removeFromBottom (34);
     strip.removeFromBottom (6); strip.removeFromTop (6);
-    auto cols = strip.reduced (16, 0);
-    auto inCol = cols.removeFromLeft (30); cols.removeFromLeft (10);
-    auto outCol = cols.removeFromLeft (30); cols.removeFromLeft (8);
+    auto cols = strip.reduced (10, 0);
+    auto inCol = cols.removeFromLeft (26); cols.removeFromLeft (6);
+    auto outCol = cols.removeFromLeft (26); cols.removeFromLeft (6);
     inL.setBounds (inCol.withY (labels.getY()).withHeight (22).expanded (6, 0));
     outL.setBounds (outCol.withY (labels.getY()).withHeight (22).expanded (6, 0));
-    trimL.setBounds (cols.withY (labels.getY()).withHeight (22).expanded (14, 0));   // output level at the top of the fader
+    trimL.setBounds (cols.withY (labels.getY()).withHeight (22).expanded (8, 0));   // output level at the top of the fader
     inClip.setBounds (inCol.withHeight (14)); outClip.setBounds (outCol.withHeight (14));   // clip lights above the meters
     inMeter.setBounds (inCol.withTrimmedTop (19)); outMeter.setBounds (outCol.withTrimmedTop (19));
     trim.setBounds (cols);

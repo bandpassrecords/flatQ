@@ -210,6 +210,13 @@ inline double biquadDb(const Biquad& b, double fs, double f) {
     return 20 * std::log10(std::abs((b.b0 + b.b1 * z1 + b.b2 * z2) / (1.0 + b.a1 * z1 + b.a2 * z2)));
 }
 
+// phase of one biquad in radians (the delay-free reference: an IIR cascade has no pure delay to remove)
+inline double biquadPhase(const Biquad& b, double fs, double f) {
+    double w = 2 * M_PI * f / fs;
+    std::complex<double> z1 = std::polar(1.0, -w), z2 = z1 * z1;
+    return std::arg((b.b0 + b.b1 * z1 + b.b2 * z2) / (1.0 + b.a1 * z1 + b.a2 * z2));
+}
+
 struct IirDesign {
     std::vector<double> freqs, gains;     // per band
     std::vector<Biquad> sections;
