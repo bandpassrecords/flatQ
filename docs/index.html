@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flatQ docs — how to use it</title>
+<meta name="description" content="How to install and use flatQ: profiles, the graph, filters, limits, manual EQ and the output controls, with screenshots.">
+<link rel="icon" href="../img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+.docs{display:grid;grid-template-columns:230px minmax(0,1fr);gap:3rem;padding:3rem 0 5rem}
+.toc{position:sticky;top:88px;align-self:start;font-size:.92rem}
+.toc h4{margin-bottom:.8rem;color:var(--text-muted);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase}
+.toc a{display:block;padding:.28rem 0 .28rem .8rem;border-left:2px solid var(--border-color);color:var(--text-secondary);text-decoration:none}
+.toc a:hover{color:var(--text-primary);border-left-color:var(--accent)}
+.article{max-width:860px}
+.article h1{font-size:2.4rem;margin-bottom:.6rem}
+.article .lead{color:var(--text-secondary);font-size:1.15rem;margin-bottom:2.5rem}
+.article section{padding:0;margin-bottom:3.4rem}
+.article h2{margin:0 0 1rem;padding-top:.4rem;font-size:1.7rem;letter-spacing:-.01em}
+.article h3{margin:1.8rem 0 .5rem;font-size:1.15rem}
+.article p{margin-bottom:1rem;color:var(--text-secondary)}
+.article ul,.article ol{margin:0 0 1.2rem 1.3rem;color:var(--text-secondary)}
+.article li{margin-bottom:.35rem}
+.article b,.article strong{color:var(--text-primary);font-weight:600}
+.article figure{margin:1.4rem 0 1.8rem}
+.article figure img{display:block;width:100%;height:auto}
+.article figcaption{margin-top:.6rem;color:var(--text-muted);font-size:.88rem}
+.article a{color:var(--accent);text-decoration:none}
+.article a:hover{text-decoration:underline}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+.def{border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);margin:1rem 0 1.4rem}
+.def div{display:grid;grid-template-columns:180px 1fr;gap:1rem;padding:.8rem 1.1rem;border-bottom:1px solid var(--border-color);font-size:.95rem}
+.def div:last-child{border-bottom:none}
+.def dt{color:var(--text-primary);font-weight:600}
+.def dd{color:var(--text-secondary)}
+.tip{padding:.9rem 1.1rem;margin:1.2rem 0;border:1px solid var(--accent-line);background:var(--accent-soft);border-radius:10px;color:var(--text-secondary);font-size:.95rem}
+@media (max-width:900px){.docs{grid-template-columns:1fr}.toc{position:static}.two{grid-template-columns:1fr}.def div{grid-template-columns:1fr;gap:.2rem}}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="container nav-content">
+    <a class="logo" href="/"><img src="../img/icon.png" alt="">flatQ</a>
+    <nav class="nav-links">
+      <a href="../#features">Features</a>
+      <a href="../#engine">Engine</a>
+      <a class="current" href="./">Docs</a>
+      <a href="../#download">Download</a>
+      <a class="gh" href="https://github.com/bandpassrecords/flatQ">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container docs">
+  <nav class="toc" aria-label="On this page">
+    <h4>On this page</h4>
+    <a href="#install">Install</a>
+    <a href="#window">The window</a>
+    <a href="#profiles">Profiles</a>
+    <a href="#graph">The graph</a>
+    <a href="#filter">Filter and FIR length</a>
+    <a href="#limits">Limits</a>
+    <a href="#smoothing">Smoothing</a>
+    <a href="#preamp">Preamp</a>
+    <a href="#manual">Manual EQ</a>
+    <a href="#output">Output controls</a>
+    <a href="#menu">Menu and settings</a>
+    <a href="#tips">Tips</a>
+  </nav>
+
+  <article class="article">
+    <h1>flatQ docs</h1>
+    <p class="lead">flatQ applies a correction profile for your headphones or speakers to everything you play. This page walks through the whole window. Click any screenshot to see it larger.</p>
+
+    <section id="install">
+      <h2>Install</h2>
+      <ol>
+        <li>Download the zip for your system from the <a href="../#download">download section</a>.</li>
+        <li>Copy the plug-in to its folder:
+          <ul>
+            <li><b>macOS:</b> <code>flatQ.vst3</code> to <code>~/Library/Audio/Plug-Ins/VST3</code>, and <code>flatQ.component</code> (Audio Unit) to <code>~/Library/Audio/Plug-Ins/Components</code>.</li>
+            <li><b>Windows:</b> the <code>flatQ.vst3</code> folder to <code>C:\Program Files\Common Files\VST3</code>.</li>
+            <li><b>Linux:</b> the <code>flatQ.vst3</code> folder to <code>~/.vst3</code>.</li>
+          </ul>
+        </li>
+        <li>Rescan the plug-ins in your DAW.</li>
+        <li>Insert flatQ as the <b>last effect on your master or stereo out</b>, so it corrects what your headphones or speakers actually play.</li>
+        <li>Pick a profile on the left. The calibration is on as soon as a profile is loaded.</li>
+      </ol>
+      <div class="tip">flatQ is for listening. Bounce or export with the calibration skipped (see <a href="#menu">Settings</a>), so your mix does not carry the correction of your monitors.</div>
+    </section>
+
+    <section id="window">
+      <h2>The window</h2>
+      <figure class="app-window"><img data-zoom src="../img/shots/default-speakers.png" alt="The flatQ window with a speaker profile loaded"><figcaption>A speaker profile with independent left and right correction.</figcaption></figure>
+      <dl class="def">
+        <div><dt>Left bar</dt><dd>Your profile library. The icon says whether a profile is for headphones or speakers. The round <b>+</b> adds a profile.</dd></div>
+        <div><dt>Header</dt><dd>The loaded profile, and a summary: whether both channels share one curve or are independent, the preamp, and the <b>max fit error</b>, which is how far the filter ends up from the ideal curve.</dd></div>
+        <div><dt>Graph</dt><dd>The correction, drawn for the left and right channels. See <a href="#graph">The graph</a>.</dd></div>
+        <div><dt>Bottom row</dt><dd>Latency and the settings that shape the filter: Filter, FIR length, Smoothing, Limits, Preamp and Manual EQ. Click one to open its options.</dd></div>
+        <div><dt>Right strip</dt><dd>Input and output meters with clip lights, the output fader, and the buttons to swap channels, sum to mono and mute. At the bottom, the calibration switch.</dd></div>
+        <div><dt>Dry / Wet</dt><dd>Mixes the original sound with the corrected one. 100 % is fully corrected.</dd></div>
+      </dl>
+      <p>Headphone profiles usually share one curve for both ears. Speaker profiles often keep a separate curve per channel, shown as an <b>L</b> and an <b>R</b> dot in the legend.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/default-headphones.png" alt="A headphone profile that is the same on both channels"><figcaption>A headphone profile: the same on both channels, so there is a single curve.</figcaption></figure>
+    </section>
+
+    <section id="profiles">
+      <h2>Profiles</h2>
+      <p>A profile describes how a pair of headphones or a set of speakers deviates from flat. flatQ applies the opposite.</p>
+      <h3>Add a profile</h3>
+      <p>Press the round <b>+</b> at the bottom of the left bar. You can:</p>
+      <ul>
+        <li><b>Search</b> the profiles that come with flatQ, filtered by brand or form.</li>
+        <li><b>Load a profile file</b> from disk: a flatQ profile (<code>.flatq</code>) or an RME TotalMix profile (<code>.tmreq</code>).</li>
+        <li><b>Import a measurement</b>: a CSV with frequency and raw columns, like the ones AutoEq publishes. You choose the target curve (flat, Harman and others) and flatQ builds the profile for you.</li>
+      </ul>
+      <figure class="app-window"><img data-zoom src="../img/shots/add-profile.png" alt="The Add a profile screen"><figcaption>The Add a profile screen.</figcaption></figure>
+      <h3>Manage a profile</h3>
+      <p>The three dots on a profile open its menu.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/row-menu.png" alt="The profile menu with Rename, Duplicate, Export and Delete"><figcaption>Rename, duplicate, export or delete a profile.</figcaption></figure>
+      <p>Profiles are saved in your user folder. <b>Settings → Open profiles folder</b> takes you there, so you can also copy <code>.flatq</code> files in by hand.</p>
+      <h3>Hide the left bar</h3>
+      <p>The square button next to the menu hides or shows the left bar, for a bigger graph.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/sidebar-hidden.png" alt="flatQ with the left bar hidden"><figcaption>The left bar hidden.</figcaption></figure>
+    </section>
+
+    <section id="graph">
+      <h2>The graph</h2>
+      <p>The graph runs from 20 Hz to 20 kHz and ±24 dB. Click an item in the legend to show or hide it.</p>
+      <dl class="def">
+        <div><dt>Target</dt><dd>The goal: a flat line at 0 dB.</dd></div>
+        <div><dt>Measured</dt><dd>What your headphones or speakers do, as the profile describes them.</dd></div>
+        <div><dt>Calibration</dt><dd>The correction flatQ applies. It is drawn by default.</dd></div>
+        <div><dt>Result</dt><dd>Measured plus Calibration. It should land on the flat target.</dd></div>
+        <div><dt>Boost limit</dt><dd>The dashed ceiling some profiles carry for how much they may be boosted. It only shows when the profile has one.</dd></div>
+      </dl>
+      <figure class="app-window"><img data-zoom src="../img/shots/main-speakers.png" alt="All curves shown for a speaker profile"><figcaption>Measured (yellow), Calibration (green) and Result (pink) for a speaker profile. The shaded area on the left is the bass limit.</figcaption></figure>
+      <figure class="app-window"><img data-zoom src="../img/shots/main-headphones.png" alt="All curves shown for a headphone profile"><figcaption>The same view for a headphone profile.</figcaption></figure>
+      <h3>Bass limit</h3>
+      <p>Many speakers cannot play deep bass, and asking for a huge boost there only wastes headroom. Drag the green line on the graph to choose a frequency: <b>boosts below it are cancelled</b>, and the allowed boost rises smoothly back to normal a little above the line. The shaded area shows where the limit applies. Drag the line all the way left to turn it off.</p>
+    </section>
+
+    <section id="filter">
+      <h2>Filter and FIR length</h2>
+      <p>The <b>Filter</b> setting decides how the correction is built.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/panel-filter.png" alt="The Filter options"><figcaption>The Filter options.</figcaption></figure>
+      <dl class="def">
+        <div><dt>Minimum phase (FIR)</dt><dd>The default. Exact, with about zero latency and no pre-ringing. A good choice for almost everything.</dd></div>
+        <div><dt>Linear phase (FIR)</dt><dd>Exact and perfectly symmetric, but it adds latency (half the FIR length). Use it for critical listening when latency does not matter.</dd></div>
+        <div><dt>Low latency (IIR)</dt><dd>About zero latency and approximate. Good for monitoring while you record. The <b>IIR resolution</b> chooses between Normal (6 bands per octave, light on the CPU) and High (48 bands per octave, about 0.1 dB error, about 8 times the CPU).</dd></div>
+      </dl>
+      <p><b>FIR length</b> is the number of taps of the FIR filter. More taps resolve the bass better; fewer taps use less CPU.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/panel-fir.png" alt="The FIR length options"><figcaption>FIR length: 4096 to 65536 taps, 16384 by default.</figcaption></figure>
+      <p>The <b>Latency</b> readout in the bottom row always shows the delay the current choice adds.</p>
+    </section>
+
+    <section id="limits">
+      <h2>Limits</h2>
+      <p>Deep dips in a measurement ask for huge boosts. The limits keep the correction in a safe range.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/panel-limits.png" alt="The Limits panel"><figcaption>The Limits panel.</figcaption></figure>
+      <dl class="def">
+        <div><dt>Respect max boost</dt><dd>Keeps boosts under the global maximum and under the profile's own ceiling, when it has one.</dd></div>
+        <div><dt>Max boost</dt><dd>The most the correction may boost, in dB.</dd></div>
+        <div><dt>Max slope</dt><dd>How fast a boost may rise, in dB per octave. The further left, the stricter; the maximum means off. It cuts narrow boosts first, usually in the treble. Cuts are never limited. 18 dB per octave is a common choice.</dd></div>
+        <div><dt>Bass limit</dt><dd>Cancels boosts below a frequency. The same control as the line on the graph.</dd></div>
+        <div><dt>Treble gain</dt><dd>Scales the correction above roughly 4 to 8 kHz. 100 % leaves it untouched; 0 % applies no treble correction.</dd></div>
+      </dl>
+      <p>A <b>*</b> next to the value in the bottom row means the max slope or the bass limit is on too. Hover over it to see all three.</p>
+    </section>
+
+    <section id="smoothing">
+      <h2>Smoothing</h2>
+      <p>Measurements are bumpy. Smoothing evens out the correction so it does not chase every narrow peak and dip, which is what makes a correction sound ringy.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/panel-smoothing.png" alt="The Smoothing options"><figcaption>Smoothing, and a separate setting for the treble.</figcaption></figure>
+      <p><b>Smoothing</b> sets the width for the whole curve. <b>Treble smoothing</b> sets a separate width, from 1/6 to 2 octaves, for the treble, where narrow corrections matter less to what you hear. The default is Same, which uses the same width everywhere.</p>
+    </section>
+
+    <section id="preamp">
+      <h2>Preamp</h2>
+      <p>When the correction boosts, the signal can go over 0 dB. <b>Auto preamp</b> lowers the overall gain by the amount needed, so the correction never clips.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/panel-preamp.png" alt="The Preamp option"><figcaption>Auto preamp (safe headroom).</figcaption></figure>
+      <p>The preamp is applied, but the graph is drawn from 0 dB so the curves stay easy to read. You can see the amount in the header and above the output fader.</p>
+    </section>
+
+    <section id="manual">
+      <h2>Manual EQ</h2>
+      <p>On top of the profile you can trim 31 third-octave bands, from 20 Hz to 20 kHz, by up to 18 dB.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/panel-manual.png" alt="The Manual EQ panel with 31 sliders"><figcaption>Manual EQ: one slider per band.</figcaption></figure>
+      <ul>
+        <li>The sliders start from the current equalization, not from zero.</li>
+        <li><b>Link L / R</b> moves both channels together. Turn it off to trim each channel on its own.</li>
+        <li><b>Save as…</b> stores the result as a new profile in your library.</li>
+        <li><b>Reset</b> clears your manual trim.</li>
+      </ul>
+    </section>
+
+    <section id="output">
+      <h2>Output controls</h2>
+      <p>The strip on the right is the last stage of the plug-in.</p>
+      <ul>
+        <li><b>In / Out meters</b> with a <b>CLIP</b> light each. A light stays on after a peak; click it to reset.</li>
+        <li><b>Output fader.</b> The level shows above it. The red part at the top marks the levels above the profile's limit.</li>
+        <li><b>Swap L/R</b> exchanges the two channels.</li>
+        <li><b>Mono</b> sums left and right.</li>
+        <li><b>Mute</b> silences the output.</li>
+        <li><b>Calibration</b> switches the whole correction on and off, to hear the difference.</li>
+      </ul>
+      <p>Whenever one of these changes what you hear, a notice appears on the graph with a button to undo it.</p>
+      <div class="two">
+        <figure class="app-window"><img data-zoom src="../img/shots/calibration-off.png" alt="Calibration disabled notice"><figcaption>Calibration disabled.</figcaption></figure>
+        <figure class="app-window"><img data-zoom src="../img/shots/notice-mono.png" alt="Mono notice"><figcaption>Mono on.</figcaption></figure>
+        <figure class="app-window"><img data-zoom src="../img/shots/notice-swap.png" alt="Swap notice"><figcaption>Left and right swapped.</figcaption></figure>
+        <figure class="app-window"><img data-zoom src="../img/shots/notice-mute.png" alt="Mute notice"><figcaption>Output muted.</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="menu">
+      <h2>Menu and settings</h2>
+      <p>The three dots at the top right open the menu.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/menu.png" alt="The flatQ menu"><figcaption>The menu.</figcaption></figure>
+      <ul>
+        <li><b>Add profile…</b> opens the Add a profile screen.</li>
+        <li><b>Save equalization as profile…</b> bakes the current result, including your manual trim, into a new profile.</li>
+        <li><b>Export current profile…</b> saves the loaded profile as a file to share or back up.</li>
+        <li><b>Settings…</b> and <b>About flatQ</b>.</li>
+      </ul>
+      <figure class="app-window"><img data-zoom src="../img/shots/settings.png" alt="The Settings panel"><figcaption>Settings.</figcaption></figure>
+      <ul>
+        <li><b>Load the last used profile on start</b> opens flatQ with the profile you used last.</li>
+        <li><b>Show tooltips</b> turns the hover hints on or off.</li>
+        <li><b>Open profiles folder</b> and <b>Open settings folder</b> show where flatQ keeps your files.</li>
+        <li><b>Skip on offline export</b> (in the plug-in, inside a host) passes the audio through untouched while your DAW bounces or exports, so the file does not carry the correction.</li>
+      </ul>
+    </section>
+
+    <section id="tips">
+      <h2>Tips</h2>
+      <ul>
+        <li><b>Start from a profile that matches your gear</b>, then listen with the calibration on and off. The change should sound like a more even, less coloured version of the same music.</li>
+        <li><b>If the bass sounds boomy or pumps</b>, lower the max boost or raise the bass limit.</li>
+        <li><b>If the treble sounds metallic</b>, try more smoothing, or lower the treble gain.</li>
+        <li><b>For tracking</b>, use the low latency (IIR) filter; for mixing and mastering, minimum phase.</li>
+        <li><b>Do not leave it on when you export</b> a mix: use Skip on offline export, or switch the calibration off.</li>
+      </ul>
+    </section>
+  </article>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="foot">
+      <div><div class="logo" style="margin-bottom:.8rem"><img src="../img/icon.png" alt="">flatQ</div><p>Calibration EQ for headphones and speakers. VST3 and AU.</p></div>
+      <div><h4>Resources</h4><a href="./">Docs</a><a href="https://github.com/bandpassrecords/flatQ">GitHub</a><a href="https://github.com/bandpassrecords/flatQ/issues">Report an issue</a><a href="https://github.com/bandpassrecords/flatQ/releases">All releases</a></div>
+      <div><h4>Built with</h4><a href="https://juce.com">JUCE</a><a href="https://github.com/jaakkopasanen/AutoEq">AutoEq (targets)</a></div>
+    </div>
+    <p class="copy">© 2026 flatQ by BandPass Records.</p>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>
