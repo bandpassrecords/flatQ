@@ -1104,7 +1104,11 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         panel->finish();
         showPanel (std::move (panel), limits);
     };
-    manual.onClick = [this] { showPanel (std::make_unique<ManualEqPanel> (proc, [safe = juce::Component::SafePointer<FlatQEditor> (this)] { if (safe != nullptr) safe->saveAsFlow(); }), manual); };
+    manual.onClick = [this]
+    {
+        juce::Component::SafePointer<FlatQEditor> safe (this);
+        showPanel (std::make_unique<ManualEqPanel> (proc, [safe] { if (safe != nullptr) safe->saveAsFlow(); }), manual);
+    };
     preamp.onClick = [this]
     {
         auto panel = std::make_unique<ParamPanel> (proc.apvts, 340);
