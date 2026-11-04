@@ -1,4 +1,4 @@
-; Inno Setup script. Build: iscc /DAppVersion=0.0.1 installers\windows\flatq.iss  (output: dist\flatQ-<version>-Windows-Setup.exe)
+; Inno Setup script. Build: iscc /DAppVersion=0.1.0 installers\windows\flatq.iss  (output: dist\flatQ-<version>-Windows-Setup.exe)
 ; Expects the Release build in build\FlatQ_artefacts\Release.
 #ifndef AppVersion
   #define AppVersion "0.0.0"
