@@ -998,8 +998,14 @@ void AddProfileScreen::paint (juce::Graphics& g)
     if (! MeasurementDb::get().available())
         g.drawFittedText ("The measurement database is not part of this build.\nUse a profile file or your own CSV.", getLocalBounds().withTrimmedRight (400).reduced (32, 80), juce::Justification::topLeft, 4, 1.0f);
     else if (! searching)
-        g.drawFittedText (juce::String (MeasurementDb::get().size()) + " measurements and profiles from AutoEq and others.\nType a name above, or pick a brand, to list them.",
+    {
+        int measurements = 0;
+        for (int i = 0; i < MeasurementDb::get().size(); ++i) if (MeasurementDb::get().entry (i).builtIn < 0) ++measurements;
+        const auto what = measurements > 0 ? juce::String (MeasurementDb::get().size()) + " measurements and profiles from AutoEq and others."
+                                           : juce::String (MeasurementDb::get().size()) + " profiles included with flatQ.";
+        g.drawFittedText (what + "\nType a name above, or pick a brand, to list them.",
                           resultsRect.reduced (2, 6), juce::Justification::topLeft, 4, 1.0f);
+    }
 }
 
 // ------------------------------------------------------------------------------------------------ editor
