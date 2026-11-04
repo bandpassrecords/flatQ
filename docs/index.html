@@ -138,10 +138,12 @@
         <div><dt>Measured</dt><dd>What your headphones or speakers do, as the profile describes them.</dd></div>
         <div><dt>Calibration</dt><dd>The correction flatQ applies. It is drawn by default.</dd></div>
         <div><dt>Result</dt><dd>Measured plus Calibration. It should land on the flat target.</dd></div>
+        <div><dt>Phase</dt><dd>The phase of the correction, from −180° to +180° (scale on the right edge of the graph). It is off by default. With linear phase it is a flat line at 0°; minimum phase and low latency bend the phase a little where the correction is strong.</dd></div>
         <div><dt>Boost limit</dt><dd>The dashed ceiling some profiles carry for how much they may be boosted. It only shows when the profile has one.</dd></div>
       </dl>
       <figure class="app-window"><img data-zoom src="../img/shots/main-speakers.png" alt="All curves shown for a speaker profile"><figcaption>Measured (yellow), Calibration (green) and Result (pink) for a speaker profile. The shaded area on the left is the bass limit.</figcaption></figure>
       <figure class="app-window"><img data-zoom src="../img/shots/main-headphones.png" alt="All curves shown for a headphone profile"><figcaption>The same view for a headphone profile.</figcaption></figure>
+      <figure class="app-window"><img data-zoom src="../img/shots/phase.png" alt="The Phase curve shown with Calibration"><figcaption>Phase (lilac) next to Calibration, in minimum phase.</figcaption></figure>
       <h3>Bass limit</h3>
       <p>Many speakers cannot play deep bass, and asking for a huge boost there only wastes headroom. Drag the green line on the graph to choose a frequency: <b>boosts below it are cancelled</b>, and the allowed boost rises smoothly back to normal a little above the line. The shaded area shows where the limit applies. Drag the line all the way left to turn it off.</p>
     </section>
@@ -204,7 +206,7 @@
       <h2>Output controls</h2>
       <p>The strip on the right is the last stage of the plug-in.</p>
       <ul>
-        <li><b>In / Out meters</b> with a <b>CLIP</b> light each. A light stays on after a peak; click it to reset.</li>
+        <li><b>In / Out meters</b> with a thin <b>clip bar</b> above each. The bar turns red when the level reaches 0 dBFS and stays red until you click it.</li>
         <li><b>Output fader.</b> The level shows above it. The red part at the top marks the levels above the profile's limit.</li>
         <li><b>Swap L/R</b> exchanges the two channels.</li>
         <li><b>Mono</b> sums left and right.</li>
@@ -234,6 +236,7 @@
       <ul>
         <li><b>Load the last used profile on start</b> opens flatQ with the profile you used last.</li>
         <li><b>Show tooltips</b> turns the hover hints on or off.</li>
+        <li><b>Light theme</b> switches flatQ between the dark and the light look.</li>
         <li><b>Open profiles folder</b> and <b>Open settings folder</b> show where flatQ keeps your files.</li>
         <li><b>Skip on offline export</b> (in the plug-in, inside a host) passes the audio through untouched while your DAW bounces or exports, so the file does not carry the correction.</li>
       </ul>
