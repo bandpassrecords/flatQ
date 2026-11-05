@@ -255,15 +255,15 @@ public:
         auto r = getLocalBounds().toFloat();
         const bool enabled = ! getToggleState();
         // enabled: green button with dark content; disabled: the normal background
-        if (enabled) { g.setColour (over ? theme::accent.brighter (0.1f) : theme::accent); g.fillRoundedRectangle (r, 6.f); }
-        else if (over) { g.setColour (theme::control); g.fillRoundedRectangle (r, 6.f); }
+        if (enabled) { g.setColour (over ? theme::accent.brighter (0.1f) : theme::accent); g.fillRect (r); }   // fills its cell edge to edge, down to the window border
+        else if (over) { g.setColour (theme::control); g.fillRect (r); }
         const auto ink = juce::Colour (0xff0d2418);
         const auto col = enabled ? ink : theme::dim;
-        const juce::Point<float> c (r.getX() + 19.f, r.getCentreY());
+        const juce::Point<float> c (r.getX() + 24.f, r.getCentreY());
         juce::Path p; p.addCentredArc (c.x, c.y, 8.f, 8.f, 0.f, 0.55f, juce::MathConstants<float>::twoPi - 0.55f, true);
         p.startNewSubPath (c.x, c.y - 11.f); p.lineTo (c.x, c.y - 1.f);
         g.setColour (col); g.strokePath (p, juce::PathStrokeType (2.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        const int tx = (int) r.getX() + 36, tw = (int) r.getWidth() - 38;
+        const int tx = (int) r.getX() + 42, tw = (int) r.getWidth() - 44;
         g.setFont (juce::FontOptions (11.5f)); g.setColour (enabled ? ink.withAlpha (0.8f) : theme::dim);
         g.drawText ("Calibration", tx, (int) r.getCentreY() - 16, tw, 16, juce::Justification::centredLeft);
         g.setFont (juce::FontOptions (13.f, juce::Font::bold)); g.setColour (enabled ? ink : theme::dim);
@@ -534,7 +534,6 @@ private:
     juce::Component *closedItem = nullptr, *calloutItem = nullptr;
     juce::uint32 closedMs = 0;
     juce::Component::SafePointer<juce::CallOutBox> callout;
-    void showFilterMenu();
     void showPanel (std::unique_ptr<juce::Component>, juce::Component& from);
     void setChoice (const char* id, int index);
     int choiceIndex (const char* id) const;
@@ -571,7 +570,7 @@ private:
     bool faderSync = false;
     double axisPre = 1e9;
     MonoButton mono;
-    StatusItem latency { "Latency", false }, filter { "Filter", true }, length { "FIR length", true },
+    StatusItem latency { "Latency", false }, filter { "Filter", true },
                smoothing { "Smoothing", true }, limits { "Limits", true }, preamp { "Preamp", true }, manual { "Manual EQ", true };
     int lastVersion = -1;
     juce::String lastProfileKey;

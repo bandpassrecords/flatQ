@@ -791,6 +791,76 @@ namespace
         juce::TextButton profilesBtn, dataBtn;
     };
 
+    // Filter type: the three ways the correction can be built, each with a plain explanation (the mode parameter's index
+    // 1 = Linear Phase, 3 = Mixed, 2 = Zero Latency; index 0 is the retired IIR mode and counts as Zero Latency).
+    class FilterPanel : public juce::Component
+    {
+    public:
+        explicit FilterPanel (juce::AudioProcessorValueTreeState& a) : apvts (a)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter ("taps")))
+                res.addItemList (p->choices, 1);
+            resA = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (apvts, "taps", res);
+            resL.setText ("Resolution (FIR length)", juce::dontSendNotification);
+            resL.setColour (juce::Label::textColourId, theme::dim);
+            addAndMakeVisible (res); addAndMakeVisible (resL);
+            setSize (600, 262);
+        }
+        void paint (juce::Graphics& g) override
+        {
+            using namespace theme;
+            g.fillAll (panel);
+            const int cur = current();
+            g.setColour (dim); g.setFont (juce::FontOptions (12.f));
+            g.drawText ("Filter type", 18, 10, 200, 20, juce::Justification::centredLeft);
+            for (int i = 0; i < 3; ++i)
+            {
+                auto row = rowRect (i);
+                const bool on = modeIdx[i] == cur;
+                if (on) { g.setColour (accent.withAlpha (0.14f)); g.fillRoundedRectangle (row.toFloat(), 6.f); }
+                g.setColour (on ? text : dim); g.setFont (juce::FontOptions (14.f, on ? juce::Font::bold : juce::Font::plain));
+                g.drawText (names[i], row.withTrimmedLeft (34), juce::Justification::centredLeft);
+                if (on) { g.setColour (accent); g.drawText (juce::String::charToString (0x2713), row.withWidth (30).withTrimmedLeft (8), juce::Justification::centredLeft); }
+            }
+            g.setColour (divider); g.drawVerticalLine (232, 10.f, (float) getHeight() - 10.f);
+            const int k = indexOf (cur);
+            auto box = juce::Rectangle<int> (250, 34, getWidth() - 268, 150);
+            g.setColour (text); g.setFont (juce::FontOptions (16.f, juce::Font::bold));
+            g.drawText (names[k], box.removeFromTop (26), juce::Justification::centredLeft);
+            g.setColour (dim); g.setFont (juce::FontOptions (13.5f));
+            g.drawFittedText (blurb[k], box.withTrimmedTop (4), juce::Justification::topLeft, 7);
+        }
+        void resized() override
+        {
+            resL.setBounds (18, getHeight() - 62, 220, 20);
+            res.setBounds (18, getHeight() - 38, 200, 26);
+        }
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            for (int i = 0; i < 3; ++i)
+                if (rowRect (i).contains (e.getPosition()))
+                    if (auto* p = apvts.getParameter ("mode")) { p->setValueNotifyingHost (p->convertTo0to1 ((float) modeIdx[i])); repaint(); }
+        }
+    private:
+        static constexpr int modeIdx[3] = { 1, 3, 2 };
+        const char* names[3] = { "Linear Phase", "Mixed", "Zero Latency" };
+        const char* blurb[3] = {
+            "No phase distortion at all: every frequency arrives together. The price is latency (half the resolution below) and a little pre-ringing before sharp changes. Best for critical listening and mastering.",
+            "About 10 ms of latency, with half the phase shift of Zero Latency and very little pre-ringing. A good compromise for mixing.",
+            "Adds no latency, so it suits recording and live monitoring. It shifts the phase where the correction is strong, mostly in the bass." };
+        juce::Rectangle<int> rowRect (int i) const { return { 10, 40 + i * 46, 212, 40 }; }
+        int current() const
+        {
+            const int m = (int) apvts.getRawParameterValue ("mode")->load();
+            return m == 1 || m == 3 ? m : 2;
+        }
+        static int indexOf (int m) { for (int i = 0; i < 3; ++i) if (modeIdx[i] == m) return i; return 2; }
+        juce::AudioProcessorValueTreeState& apvts;
+        juce::ComboBox res;
+        juce::Label resL;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> resA;
+    };
+
     juce::String smoothName (int i)
     {
         static const char* n[] = { "Off", "1/24 oct", "1/12 oct", "1/6 oct", "1/3 oct", "1/2 oct", "1 oct" };
@@ -1054,7 +1124,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
     laf.applyColours();
     setLookAndFeel (&laf);
     for (auto* c : std::initializer_list<juce::Component*> { &graph, &profiles, &addButton, &title, &subtitle, &kindIcon, &inClip, &outClip, &logoMark, &logo, &brand, &inL, &outL, &trimL,
-                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &sidebarBtn, &mono, &latency, &filter, &length, &smoothing, &limits, &preamp, &manual })
+                                                              &inMeter, &outMeter, &trim, &volumeIcon, &swap, &bypass, &dryWet, &dryWetL, &notices, &aboutArea, &menuDots, &sidebarBtn, &mono, &latency, &filter, &smoothing, &limits, &preamp, &manual })
         addAndMakeVisible (c);
 
     logo.setFont (juce::FontOptions (26.f, juce::Font::bold));
@@ -1122,16 +1192,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         if (auto* prm = proc.apvts.getParameter ("basslimit")) prm->setValueNotifyingHost (prm->convertTo0to1 (hz > 0.f ? hz : 20.f));   // 0 from the graph = off = bottom of the range
     };
 
-    filter.onClick = [this] { showFilterMenu(); };
-    length.onClick = [this]
-    {
-        juce::PopupMenu m;
-        const int cur = choiceIndex ("taps");
-        const char* names[] = { "4096 taps", "8192 taps", "16384 taps", "32768 taps  (finer bass)", "65536 taps  (finest, slow to design)" };
-        for (int i = 0; i < 5; ++i) m.addItem (i + 1, names[i], true, i == cur);
-        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&length).withParentComponent (this).withMinimumWidth (160),
-                         [this] (int r) { markClosed (length); if (r > 0) setChoice ("taps", r - 1); });
-    };
+    filter.onClick = [this] { showPanel (std::make_unique<FilterPanel> (proc.apvts), filter); };
     smoothing.onClick = [this]
     {
         auto panel = std::make_unique<ParamPanel> (proc.apvts);
@@ -1164,7 +1225,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         showPanel (std::move (panel), preamp);
     };
 
-    for (auto* it : { &filter, &length, &smoothing, &limits, &preamp, &manual })   // second click closes instead of reopening
+    for (auto* it : { &filter, &smoothing, &limits, &preamp, &manual })   // second click closes instead of reopening
     {
         auto open = std::move (it->onClick);
         it->onClick = [this, it, open]
@@ -1175,7 +1236,7 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
         };
     }
 
-    filter.setTooltip ("Low latency IIR: approximate, no delay. Linear phase FIR: exact, delayed. Minimum phase FIR: exact, no delay.");
+    filter.setTooltip ("How the correction is built: Linear Phase (no phase shift, most latency), Mixed (a compromise) or Zero Latency. Click for details.");
     preamp.setTooltip ("Gain reduction that keeps the EQ from boosting above 0 dB");
     inClip.setTooltip ("Input clipping: lights up at 0 dBFS. Click to reset.");
     outClip.setTooltip ("Output clipping: lights up at 0 dBFS. Click to reset.");
@@ -1271,30 +1332,13 @@ void FlatQEditor::showPanel (std::unique_ptr<juce::Component> c, juce::Component
     box.addComponentListener (this);
 }
 
-void FlatQEditor::showFilterMenu()
-{
-    juce::PopupMenu m;
-    const int cur = choiceIndex ("mode");
-    m.addItem (1, "Low latency (IIR)  -  ~0 latency, approximate", true, cur == 0);
-    m.addItem (2, "Linear phase (FIR)  -  exact, latency = taps/2", true, cur == 1);
-    m.addItem (3, "Minimum phase (FIR)  -  exact, ~0 latency", true, cur == 2);
-    m.addSeparator();
-    m.addSectionHeader ("IIR resolution (low latency mode)");
-    m.addItem (11, "Normal  -  6 bands/oct, light on CPU", true, choiceIndex ("iirres") == 0);
-    m.addItem (12, "High  -  48 bands/oct, ~0.1 dB error, ~8x the CPU", true, choiceIndex ("iirres") == 1);
-    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&filter).withParentComponent (this),
-                     [this] (int r) { markClosed (filter); if (r >= 1 && r <= 3) setChoice ("mode", r - 1); else if (r >= 11) setChoice ("iirres", r - 11); });
-}
-
 void FlatQEditor::refreshStatus()
 {
     auto& a = proc.apvts;
     const double fs = juce::jmax (1.0, proc.getSampleRate_());
     latency.setValue (juce::String (proc.getLatencySamples() / fs * 1000.0, 1) + " ms");
     const int mode = choiceIndex ("mode");
-    filter.setValue (mode == 0 ? (choiceIndex ("iirres") == 1 ? "Low lat. HD" : "Low latency") : mode == 1 ? "Linear" : "Min phase");
-    static const char* taps[] = { "4096", "8192", "16384", "32768", "65536" };
-    length.setValue (mode == 0 ? "n/a" : juce::String (taps[juce::jlimit (0, 4, choiceIndex ("taps"))]));
+    filter.setValue (mode == 1 ? "Linear Phase" : mode == 3 ? "Mixed" : "Zero Latency");
     const int sm = choiceIndex ("smooth"), ts = choiceIndex ("treblesmooth");
     static const char* tsn[] = { "", "1/6", "1/3", "1/2", "1", "2" };
     smoothing.setValue (smoothName (sm) + (ts > 0 ? juce::String (" / ") + tsn[ts] + " hf" : juce::String()));
@@ -1408,8 +1452,8 @@ void FlatQEditor::resized()
     subtitle.setBounds (head.reduced (20, 0).withHeight (20).withTrimmedLeft (38));
 
     auto status = r.removeFromBottom (statusH);
-    StatusItem* items[] = { &latency, &filter, &length, &smoothing, &limits, &preamp, &manual };
-    const int w = status.getWidth() / 7;
+    StatusItem* items[] = { &latency, &filter, &smoothing, &limits, &preamp, &manual };
+    const int w = status.getWidth() / 6;
     for (auto* it : items) it->setBounds (status.removeFromLeft (w));
     auto dwRow = r.removeFromBottom (48);                 // Dry / Wet under the graph, on the right
     dryWet.setBounds (dwRow.removeFromRight (122).reduced (0, 4));
@@ -1420,7 +1464,7 @@ void FlatQEditor::resized()
     // right strip: In / Out meters and the output trim fader
     strip.removeFromTop (10);
     auto labels = strip.removeFromTop (22);
-    bypass.setBounds (strip.removeFromBottom (60).reduced (8, 8));
+    bypass.setBounds (strip.removeFromBottom (statusH));   // same height as the status row, flush with the window edges
     auto icons = strip.removeFromBottom (34);
     strip.removeFromBottom (6); strip.removeFromTop (6);
     auto cols = strip.reduced (10, 0);

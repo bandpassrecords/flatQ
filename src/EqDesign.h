@@ -171,7 +171,10 @@ inline std::vector<float> designLinearPhase(const Profile& p, int ch, double sam
 
 // Minimum-phase FIR: same magnitude as designLinearPhase but no pre-ringing and ~0 latency (cepstral method).
 // taps must be a power of two. The response is designed on a 4x longer FFT and truncated with a short fade-out.
-inline std::vector<float> designMinPhase(const Profile& p, int ch, double sampleRate, int taps, double pre, const DesignOptions& o = {}) {
+// phaseShare blends between zero phase (0) and minimum phase (1) with the same magnitude: 0.5 is the "mixed" design, whose
+// small pre-ringing fits in delaySamples of latency.
+inline std::vector<float> designMinPhase(const Profile& p, int ch, double sampleRate, int taps, double pre, const DesignOptions& o = {},
+                                         double phaseShare = 1.0, int delaySamples = 0) {
     const size_t N = size_t(taps) * 4;
     std::vector<std::complex<double>> c(N);
     for (size_t k = 0; k <= N / 2; ++k) {
@@ -181,17 +184,22 @@ inline std::vector<float> designMinPhase(const Profile& p, int ch, double sample
         if (k > 0 && k < N / 2) c[N - k] = lg;
     }
     fftInPlace(c, true);                                   // real cepstrum
-    for (size_t n = 1; n < N / 2; ++n) c[n] *= 2.0;        // fold onto the causal part
-    for (size_t n = N / 2 + 1; n < N; ++n) c[n] = 0;
+    for (size_t n = 1; n < N / 2; ++n) c[n] *= 1.0 + phaseShare;          // causal half: x2 for minimum phase
+    for (size_t n = N / 2 + 1; n < N; ++n) c[n] *= 1.0 - phaseShare;      // anti-causal half: 0 for minimum phase
     fftInPlace(c, false);
     for (auto& x : c) x = std::exp(x);                     // exp(log-mag + j*phase)
     fftInPlace(c, true);
-    const int shift = std::clamp(int(std::lround(p.delayMs(ch) * sampleRate / 1000.0)), 0, taps / 4);
+    const int shift = std::clamp(int(std::lround(p.delayMs(ch) * sampleRate / 1000.0)), 0, taps / 4) + delaySamples;
     std::vector<float> h(size_t(taps), 0.0f);
     const int fade = taps / 8;
-    for (int n = shift; n < taps; ++n) {
+    const int fadeIn = std::max(1, delaySamples / 4);      // the part of the pre-ringing that would fall before time zero
+    for (int n = 0; n < taps; ++n) {
         double w = n < taps - fade ? 1.0 : 0.5 + 0.5 * std::cos(M_PI * double(n - (taps - fade)) / double(fade));
-        h[size_t(n)] = float(c[size_t(n - shift)].real() * w);
+        if (delaySamples > 0 && n < fadeIn) w *= 0.5 - 0.5 * std::cos(M_PI * double(n) / double(fadeIn));
+        const long src = long(n) - shift;
+        const size_t idx = size_t(((src % long(N)) + long(N)) % long(N));
+        if (src < 0 && delaySamples == 0) continue;        // plain minimum phase: nothing before the profile's own delay
+        h[size_t(n)] = float(c[idx].real() * w);
     }
     return h;
 }

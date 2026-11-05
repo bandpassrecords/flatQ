@@ -2,7 +2,7 @@
 
 A calibration EQ plugin (VST3 and AU) that applies headphone or speaker correction profiles to your audio output. Put it on the master bus of your DAW.
 
-- **Two engines, your choice:** low-latency IIR, or linear-phase FIR (4096 / 8192 / 16384 taps).
+- **Three filter types:** Linear Phase (no phase shift, most latency), Mixed (about 10 ms) and Zero Latency, all FIR with a selectable resolution (4096 to 65536 taps).
 - **Per-channel profiles:** independent left/right responses, delays and gains.
 - **Boost limits:** a global max-boost setting plus a profile's own per-frequency ceiling, with optional auto preamp.
 - **Response graph:** target, actual filter response and boost limit.
@@ -29,7 +29,7 @@ CI (`.github/workflows/`) builds macOS, Windows and Linux on every push; pushing
 
 1. Insert flatQ as the last effect on your master / stereo out.
 2. Pick a profile from the dropdown, or use **Load file...**.
-3. Choose **Low latency (IIR)** for monitoring, or **Linear phase (FIR)** for mixing and mastering. FIR at 16384 taps reports about 170 ms of latency at 48 kHz, which the host compensates for.
+3. Choose **Zero Latency** for recording and monitoring, **Mixed** for mixing, or **Linear Phase** for critical listening and mastering. Linear Phase at 16384 taps reports about 170 ms of latency at 48 kHz, which the host compensates for.
 
 Controls: max boost (dB), respect max boost, auto preamp, output trim, bypass, skip on export.
 

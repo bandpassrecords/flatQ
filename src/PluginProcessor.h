@@ -91,7 +91,8 @@ public:
     double getSampleRate_() const { return sampleRateAtomic.load(); }
 
 private:
-    enum Mode { LowLatency = 0, LinearPhase = 1, MinPhase = 2 };
+    enum Mode { LowLatency = 0, LinearPhase = 1, MinPhase = 2, Mixed = 3 };   // LowLatency (the old IIR) now plays as MinPhase
+    static constexpr double kMixedShare = 0.5, kMixedLatencyMs = 10.0;   // Mixed: half the phase shift of minimum phase, ~10 ms of latency
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     void parameterChanged (const juce::String&, float) override;
     float outputTrimDb() const;
@@ -110,14 +111,6 @@ private:
     juce::String profilePath;                 // custom file, empty for built-ins
     std::atomic<int> builtInIndex { -1 };
     bool setProfile (std::shared_ptr<const flatq::Profile>, const juce::String& path, int builtIn, bool applyHints);
-
-    // IIR state (guarded by iirLock; audio thread only try-locks)
-    juce::SpinLock iirLock;
-    std::array<std::vector<flatq::Biquad>, 2> sections;
-    std::array<std::vector<double>, 2> z1, z2;
-    std::array<std::vector<float>, 2> delayBuf;
-    std::array<int, 2> delayPos {};
-    bool iirReady = false;
 
     juce::dsp::Convolution convolution;
     std::atomic<bool> firReady { false };

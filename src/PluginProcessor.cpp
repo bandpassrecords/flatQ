@@ -28,11 +28,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout FlatQProcessor::createLayout
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout l;
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "mode", 1 }, "Mode",
-           StringArray { "Low latency (IIR)", "Linear phase (FIR)", "Minimum phase (FIR)" }, 2));   // exact and ~0 latency
+           StringArray { "Zero Latency (old)", "Linear Phase", "Zero Latency", "Mixed" }, 2));   // 0 is the retired IIR mode: it plays as Zero Latency
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "taps", 1 }, "FIR length",
            StringArray { "4096", "8192", "16384", "32768", "65536" }, 2));
-    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "iirres", 1 }, "IIR resolution",
-           StringArray { "Normal (6 bands/oct)", "High (48 bands/oct)" }, 0));
     l.add (std::make_unique<AudioParameterBool>   (ParameterID { "clamp", 1 }, "Respect max boost", true));
     l.add (std::make_unique<AudioParameterFloat>  (ParameterID { "maxboost", 1 }, "Max boost",
            NormalisableRange<float> (0.f, 30.f, 0.5f), 12.f));
@@ -73,7 +71,7 @@ FlatQProcessor::FlatQProcessor()
 {
     for (auto& b : dryBuf) b.assign (kMaxLatency, 0.0f);
     for (auto& c : manualEq) for (auto& b : c) b = 0.f;
-    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "maxslope", "treblegain", "basslimit", "autopreamp" }) apvts.addParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "clamp", "maxboost", "smooth", "treblesmooth", "maxslope", "treblegain", "basslimit", "autopreamp" }) apvts.addParameterListener (id, this);
     designThread = std::make_unique<DesignThread> (*this);
     designThread->startThread();
 
@@ -120,7 +118,7 @@ juce::File FlatQProcessor::lastProfileFile()
 
 FlatQProcessor::~FlatQProcessor()
 {
-    for (auto* id : { "mode", "taps", "iirres", "clamp", "maxboost", "smooth", "treblesmooth", "maxslope", "treblegain", "basslimit", "autopreamp" }) apvts.removeParameterListener (id, this);
+    for (auto* id : { "mode", "taps", "clamp", "maxboost", "smooth", "treblesmooth", "maxslope", "treblegain", "basslimit", "autopreamp" }) apvts.removeParameterListener (id, this);
     designThread->stopThread (5000);
 }
 
@@ -470,7 +468,8 @@ void FlatQProcessor::redesign()
 
     flatq::DesignOptions opt = baseOptions();
     const double fs = sampleRateAtomic.load();
-    const int mode = (int) apvts.getRawParameterValue ("mode")->load();
+    int mode = (int) apvts.getRawParameterValue ("mode")->load();
+    if (mode == LowLatency) mode = MinPhase;         // the retired IIR mode
     const int nResp = p->channels();                 // 1 = same response on both channels
 
     GraphData g;
@@ -500,49 +499,15 @@ void FlatQProcessor::redesign()
         for (int c = 0; c < 2; ++c) g.target[(size_t) c].push_back ((float) (flatq::targetDb (*p, src (c), f, opt) + pre));
     }
 
-    if (mode == LowLatency)
-    {
-        const int iirBands = apvts.getRawParameterValue ("iirres")->load() > 0.5f ? 48 : 6;
-        flatq::IirDesign d[2];
-        for (int c = 0; c < 2; ++c) d[c] = (c > 0 && nEff == 1) ? d[0] : flatq::designLowLatency (*p, src (c), fs, pre, opt, iirBands);
-        for (int c = 0; c < 2; ++c)
-            for (float f : g.freqs)
-            {
-                double r = 0; for (auto& b : d[c].sections) r += flatq::biquadDb (b, fs, f);
-                g.actual[(size_t) c].push_back ((float) r);
-            }
-        for (int c = 0; c < 2; ++c)
-            for (float f : g.freqs)
-            {
-                double ph = 0; for (auto& b : d[c].sections) ph += flatq::biquadPhase (b, fs, f);
-                ph = std::remainder (ph, 2 * juce::MathConstants<double>::pi);
-                g.phase[(size_t) c].push_back ((float) (ph * 180.0 / juce::MathConstants<double>::pi));
-            }
-        g.maxErrDb = juce::jmax (d[0].maxErrDb, d[1].maxErrDb);
-        {
-            juce::SpinLock::ScopedLockType sl (iirLock);
-            for (size_t c = 0; c < 2; ++c)
-            {
-                sections[c] = std::move (d[c].sections);
-                z1[c].assign (sections[c].size(), 0.0);
-                z2[c].assign (sections[c].size(), 0.0);
-                const int dly = juce::jlimit (0, 4096, (int) std::lround (p->delayMs ((int) src ((int) c)) * fs / 1000.0));
-                delayBuf[c].assign ((size_t) dly, 0.0f);
-                delayPos[c] = 0;
-            }
-            iirReady = true;
-        }
-        latencyNow = 0;
-        juce::MessageManager::callAsync ([this] { setLatencySamples (0); });
-    }
-    else
     {
         static const int tapOptions[] = { 4096, 8192, 16384, 32768, 65536 };
         const int taps = tapOptions[juce::jlimit (0, 4, (int) apvts.getRawParameterValue ("taps")->load())];
+        const int mixedDelay = (int) std::lround (kMixedLatencyMs * fs / 1000.0);
         juce::AudioBuffer<float> ir (2, taps);
         for (int c = 0; c < 2; ++c)
         {
             auto h = mode == MinPhase ? flatq::designMinPhase (*p, src (c), fs, taps, pre, opt)
+                   : mode == Mixed    ? flatq::designMinPhase (*p, src (c), fs, taps, pre, opt, kMixedShare, mixedDelay)
                                       : flatq::designLinearPhase (*p, src (c), fs, taps, pre, opt);
             ir.copyFrom (c, 0, h.data(), taps);
             {   // achieved response: zero-padded FFT of the taps, interpolated at the graph frequencies
@@ -552,7 +517,7 @@ void FlatQProcessor::redesign()
                 flatq::fftInPlace (a, false);
                 // phase: take the pure delay out (the linear-phase peak at taps/2, and the profile's own delay), then interpolate
                 const int shift = juce::jlimit (0, taps / 4, (int) std::lround (p->delayMs ((int) src (c)) * fs / 1000.0));
-                const double delay = (mode == MinPhase ? 0 : taps / 2) + shift;
+                const double delay = (mode == MinPhase ? 0 : mode == Mixed ? mixedDelay : taps / 2) + shift;
                 auto undelayed = [&] (size_t k) { return a[k] * std::polar (1.0, 2.0 * juce::MathConstants<double>::pi * (double) k * delay / (double) N); };
                 for (float f : g.freqs)
                 {
@@ -569,7 +534,7 @@ void FlatQProcessor::redesign()
         convolution.loadImpulseResponse (std::move (ir), fs, juce::dsp::Convolution::Stereo::yes,
                                          juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
         firReady = true;
-        const int lat = mode == MinPhase ? 0 : taps / 2;
+        const int lat = mode == MinPhase ? 0 : mode == Mixed ? mixedDelay : taps / 2;
         latencyNow = lat;
         juce::MessageManager::callAsync ([this, lat] { setLatencySamples (lat); });
     }
@@ -649,40 +614,6 @@ void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         }
     };
 
-    if (mode == LowLatency)
-    {
-        juce::SpinLock::ScopedTryLockType lock (iirLock);
-        if (! lock.isLocked() || ! iirReady) return;
-        for (int c = 0; c < nch; ++c)
-        {
-            const size_t ci = (size_t) c, ns = sections[ci].size();
-            float* x = buffer.getWritePointer (c);
-            double* s1 = z1[ci].data();
-            double* s2 = z2[ci].data();
-            const auto* bq = sections[ci].data();
-            auto& dl = delayBuf[ci];
-            for (int i = 0; i < n; ++i)
-            {
-                double v = x[i];
-                for (size_t k = 0; k < ns; ++k)             // transposed direct form II
-                {
-                    const auto& b = bq[k];
-                    double y = b.b0 * v + s1[k];
-                    s1[k] = b.b1 * v - b.a1 * y + s2[k];
-                    s2[k] = b.b2 * v - b.a2 * y;
-                    v = y;
-                }
-                float out = (float) v;
-                if (! dl.empty())                           // per-channel delay from the profile (samples)
-                {
-                    std::swap (out, dl[(size_t) delayPos[ci]]);
-                    if (++delayPos[ci] >= (int) dl.size()) delayPos[ci] = 0;
-                }
-                x[i] = out;
-            }
-        }
-    }
-    else
     {
         if (! firReady) return;
         juce::dsp::AudioBlock<float> block (buffer);
