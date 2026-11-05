@@ -63,7 +63,7 @@
     <a href="#window">The window</a>
     <a href="#profiles">Profiles</a>
     <a href="#graph">The graph</a>
-    <a href="#filter">Filter and FIR length</a>
+    <a href="#filter">Filter type</a>
     <a href="#limits">Limits</a>
     <a href="#smoothing">Smoothing</a>
     <a href="#preamp">Preamp</a>
@@ -102,7 +102,7 @@
         <div><dt>Left bar</dt><dd>Your profile library. The icon says whether a profile is for headphones or speakers. The round <b>+</b> adds a profile.</dd></div>
         <div><dt>Header</dt><dd>The loaded profile, and a summary: whether both channels share one curve or are independent, the preamp, and the <b>max fit error</b>, which is how far the filter ends up from the ideal curve.</dd></div>
         <div><dt>Graph</dt><dd>The correction, drawn for the left and right channels. See <a href="#graph">The graph</a>.</dd></div>
-        <div><dt>Bottom row</dt><dd>Latency and the settings that shape the filter: Filter, FIR length, Smoothing, Limits, Preamp and Manual EQ. Click one to open its options.</dd></div>
+        <div><dt>Bottom row</dt><dd>Latency and the settings that shape the filter: Filter, Smoothing, Limits, Preamp and Manual EQ. Click one to open its options.</dd></div>
         <div><dt>Right strip</dt><dd>Input and output meters with clip lights, the output fader, and the buttons to swap channels, sum to mono and mute. At the bottom, the calibration switch.</dd></div>
         <div><dt>Dry / Wet</dt><dd>Mixes the original sound with the corrected one. 100 % is fully corrected.</dd></div>
       </dl>
@@ -138,27 +138,26 @@
         <div><dt>Measured</dt><dd>What your headphones or speakers do, as the profile describes them.</dd></div>
         <div><dt>Calibration</dt><dd>The correction flatQ applies. It is drawn by default.</dd></div>
         <div><dt>Result</dt><dd>Measured plus Calibration. It should land on the flat target.</dd></div>
-        <div><dt>Phase</dt><dd>The phase of the correction, from −180° to +180° (scale on the right edge of the graph). It is off by default. With linear phase it is a flat line at 0°; minimum phase and low latency bend the phase a little where the correction is strong.</dd></div>
+        <div><dt>Phase</dt><dd>The phase of the correction, from −180° to +180° (scale on the right edge of the graph). It is off by default. With Linear Phase it is a flat line at 0°; Mixed and Zero Latency bend the phase a little where the correction is strong.</dd></div>
         <div><dt>Boost limit</dt><dd>The dashed ceiling some profiles carry for how much they may be boosted. It only shows when the profile has one.</dd></div>
       </dl>
       <figure class="app-window"><img data-zoom src="../img/shots/main-speakers.png" alt="All curves shown for a speaker profile"><figcaption>Measured (yellow), Calibration (green) and Result (pink) for a speaker profile. The shaded area on the left is the bass limit.</figcaption></figure>
       <figure class="app-window"><img data-zoom src="../img/shots/main-headphones.png" alt="All curves shown for a headphone profile"><figcaption>The same view for a headphone profile.</figcaption></figure>
-      <figure class="app-window"><img data-zoom src="../img/shots/phase.png" alt="The Phase curve shown with Calibration"><figcaption>Phase (lilac) next to Calibration, in minimum phase.</figcaption></figure>
+      <figure class="app-window"><img data-zoom src="../img/shots/phase.png" alt="The Phase curve shown with Calibration"><figcaption>Phase (lilac) next to Calibration, in Zero Latency.</figcaption></figure>
       <h3>Bass limit</h3>
       <p>Many speakers cannot play deep bass, and asking for a huge boost there only wastes headroom. Drag the green line on the graph to choose a frequency: <b>boosts below it are cancelled</b>, and the allowed boost rises smoothly back to normal a little above the line. The shaded area shows where the limit applies. Drag the line all the way left to turn it off.</p>
     </section>
 
     <section id="filter">
-      <h2>Filter and FIR length</h2>
-      <p>The <b>Filter</b> setting decides how the correction is built.</p>
-      <figure class="app-window"><img data-zoom src="../img/shots/panel-filter.png" alt="The Filter options"><figcaption>The Filter options.</figcaption></figure>
+      <h2>Filter type</h2>
+      <p>The <b>Filter</b> setting decides how the correction is built. Click it in the bottom row to read about each type.</p>
+      <figure class="app-window"><img data-zoom src="../img/shots/panel-filter.png" alt="The Filter type panel"><figcaption>The Filter type panel, with a short explanation of each type.</figcaption></figure>
       <dl class="def">
-        <div><dt>Minimum phase (FIR)</dt><dd>The default. Exact, with about zero latency and no pre-ringing. A good choice for almost everything.</dd></div>
-        <div><dt>Linear phase (FIR)</dt><dd>Exact and perfectly symmetric, but it adds latency (half the FIR length). Use it for critical listening when latency does not matter.</dd></div>
-        <div><dt>Low latency (IIR)</dt><dd>About zero latency and approximate. Good for monitoring while you record. The <b>IIR resolution</b> chooses between Normal (6 bands per octave, light on the CPU) and High (48 bands per octave, about 0.1 dB error, about 8 times the CPU).</dd></div>
+        <div><dt>Zero Latency</dt><dd>The default. Adds no latency, so it suits recording and live monitoring. It shifts the phase where the correction is strong, mostly in the bass.</dd></div>
+        <div><dt>Mixed</dt><dd>About 10 ms of latency, with half the phase shift of Zero Latency and very little pre-ringing. A good compromise for mixing.</dd></div>
+        <div><dt>Linear Phase</dt><dd>No phase distortion at all: every frequency arrives together. The price is latency (half the resolution) and a little pre-ringing before sharp changes. Best for critical listening and mastering.</dd></div>
       </dl>
-      <p><b>FIR length</b> is the number of taps of the FIR filter. More taps resolve the bass better; fewer taps use less CPU.</p>
-      <figure class="app-window"><img data-zoom src="../img/shots/panel-fir.png" alt="The FIR length options"><figcaption>FIR length: 4096 to 65536 taps, 16384 by default.</figcaption></figure>
+      <p><b>Resolution</b> is the length of the filter, from 4096 to 65536 taps (16384 by default). More taps resolve the bass better; fewer taps use less CPU, and Linear Phase adds less latency.</p>
       <p>The <b>Latency</b> readout in the bottom row always shows the delay the current choice adds.</p>
     </section>
 
@@ -206,7 +205,7 @@
       <h2>Output controls</h2>
       <p>The strip on the right is the last stage of the plug-in.</p>
       <ul>
-        <li><b>In / Out meters</b> with a thin <b>clip bar</b> above each. The bar turns red when the level reaches 0 dBFS and stays red until you click it.</li>
+        <li><b>In / Out meters</b> with two small <b>clip dots</b> above each, one per channel (a single dot when the output is mono). A dot turns red when its channel reaches 0 dBFS and stays red until you click it.</li>
         <li><b>Output fader.</b> The level shows above it. The red part at the top marks the levels above the profile's limit.</li>
         <li><b>Swap L/R</b> exchanges the two channels.</li>
         <li><b>Mono</b> sums left and right.</li>
@@ -248,7 +247,7 @@
         <li><b>Start from a profile that matches your gear</b>, then listen with the calibration on and off. The change should sound like a more even, less coloured version of the same music.</li>
         <li><b>If the bass sounds boomy or pumps</b>, lower the max boost or raise the bass limit.</li>
         <li><b>If the treble sounds metallic</b>, try more smoothing, or lower the treble gain.</li>
-        <li><b>For tracking</b>, use the low latency (IIR) filter; for mixing and mastering, minimum phase.</li>
+        <li><b>For tracking</b>, use Zero Latency; for mixing, Mixed; for mastering and critical listening, Linear Phase.</li>
         <li><b>Do not leave it on when you export</b> a mix: use Skip on offline export, or switch the calibration off.</li>
       </ul>
     </section>

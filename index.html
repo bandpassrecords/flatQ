@@ -134,9 +134,9 @@
       <p class="section-subtitle">Pick the trade-off between latency and phase accuracy that suits the job.</p>
     </div>
     <div class="grid">
-      <div class="card"><p class="eyebrow mono">Default</p><h3>Minimum-phase FIR</h3><p>A smooth, natural correction with no pre-ringing. 4096 to 65536 taps; 16384 by default.</p></div>
-      <div class="card"><p class="eyebrow mono">Accuracy</p><h3>Linear-phase FIR</h3><p>Perfectly symmetric, for when phase accuracy matters more than latency.</p></div>
-      <div class="card"><p class="eyebrow mono">Low latency</p><h3>IIR</h3><p>Peaking filters with 6 or 48 bands per octave, for monitoring while you record.</p></div>
+      <div class="card"><p class="eyebrow mono">Default</p><h3>Zero Latency</h3><p>Adds no latency, so it suits recording and live monitoring. It shifts the phase a little where the correction is strong.</p></div>
+      <div class="card"><p class="eyebrow mono">Compromise</p><h3>Mixed</h3><p>About 10 ms of latency, half the phase shift and very little pre-ringing. A good fit for mixing.</p></div>
+      <div class="card"><p class="eyebrow mono">Accuracy</p><h3>Linear Phase</h3><p>No phase distortion at all, for critical listening and mastering, at the cost of latency.</p></div>
       <div class="card"><p class="eyebrow mono">Manual</p><h3>31-band trim</h3><p>Adjust each third-octave band on top of the profile, per channel or linked, and save the result as a new profile.</p></div>
       <div class="card"><p class="eyebrow mono">Export</p><h3>Skip on offline export</h3><p>Pass the audio through untouched during offline renders, so a mixdown never carries your monitor correction.</p></div>
       <div class="card"><p class="eyebrow mono">Targets</p><h3>Flat, or a curve you prefer</h3><p>Ships with the AutoEq target curves, such as Harman, for importing a measurement against the target you like.</p></div>
