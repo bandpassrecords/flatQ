@@ -1238,10 +1238,10 @@ FlatQEditor::FlatQEditor (FlatQProcessor& p) : AudioProcessorEditor (p), proc (p
 
     filter.setTooltip ("How the correction is built: Linear Phase (no phase shift, most latency), Mixed (a compromise) or Zero Latency. Click for details.");
     preamp.setTooltip ("Gain reduction that keeps the EQ from boosting above 0 dB");
-    inClip.setTooltip ("Input clipping: lights up at 0 dBFS. Click to reset.");
-    outClip.setTooltip ("Output clipping: lights up at 0 dBFS. Click to reset.");
-    inClip.onReset  = [this] { proc.inClipped = false; inClip.setClipped (false); };
-    outClip.onReset = [this] { proc.outClipped = false; outClip.setClipped (false); };
+    inClip.setTooltip ("Input clipping, per channel: a dot turns red at 0 dBFS and stays red. Click to reset.");
+    outClip.setTooltip ("Output clipping, per channel: a dot turns red at 0 dBFS and stays red. Click to reset.");
+    inClip.onReset  = [this] { proc.inClipped[0] = proc.inClipped[1] = false; inClip.setClipped (false, false); };
+    outClip.onReset = [this] { proc.outClipped[0] = proc.outClipped[1] = false; outClip.setClipped (false, false); };
     subtitle.setTooltip ("Preamp: the gain reduction that keeps the EQ from clipping. Max fit error: the largest gap between the target and the filter.");
 
     if (! sidebarVisible) applySidebarVisibility();
@@ -1367,7 +1367,7 @@ void FlatQEditor::refreshStatus()
         const bool edited = proc.manualEditedCount() > 0;
         if (edited != saveAsBtn.isVisible()) { saveAsBtn.setVisible (edited); resized(); }
     }
-    outMeter.mono = a.getRawParameterValue ("mono")->load() > 0.5f;   // mono output: one bar instead of two
+    outMeter.mono = a.getRawParameterValue ("mono")->load() > 0.5f; outClip.setMono (outMeter.mono);   // mono output: one bar instead of two
     {   // options that change the sound but are not visible: flag them in the middle of the graph
         auto on = [&a] (const char* id) { return a.getRawParameterValue (id)->load() > 0.5f; };
         auto turnOff = [this] (const char* id) { return [this, id] { if (auto* prm = proc.apvts.getParameter (id)) prm->setValueNotifyingHost (0.f); }; };
@@ -1390,7 +1390,7 @@ void FlatQEditor::refreshStatus()
 void FlatQEditor::timerCallback()
 {
     inMeter.repaint(); outMeter.repaint();
-    inClip.setClipped (proc.inClipped.load()); outClip.setClipped (proc.outClipped.load());
+    inClip.setClipped (proc.inClipped[0].load(), proc.inClipped[1].load()); outClip.setClipped (proc.outClipped[0].load(), proc.outClipped[1].load());
     const int v = proc.getGraphVersion();
     if (v != lastVersion)
     {

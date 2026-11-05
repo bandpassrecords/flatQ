@@ -362,23 +362,31 @@ public:
     }
 };
 
-// Clipping indicator above a level meter: lights up (red) once the signal has reached 0 dBFS and stays lit until clicked.
+// Clipping indicators above a level meter: one dot per channel (they clip independently), above the matching bar. A dot turns
+// red when that channel reaches 0 dBFS and stays red until clicked; with a mono output there is a single, centred dot.
 class ClipLight : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     std::function<void()> onReset;
-    void setClipped (bool c) { if (c != clipped) { clipped = c; repaint(); } }
+    bool mono = false;
+    void setClipped (bool l, bool r) { if (l != clipped[0] || r != clipped[1]) { clipped[0] = l; clipped[1] = r; repaint(); } }
+    void setMono (bool m) { if (m != mono) { mono = m; repaint(); } }
     void paint (juce::Graphics& g) override
     {
-        // a slim bar: dark while the level is fine, red from the first clip until it is clicked
-        auto r = getLocalBounds().toFloat().withSizeKeepingCentre ((float) getWidth() - 2.f, 5.f);
-        g.setColour (clipped ? juce::Colour (0xffef4444) : theme::control.interpolatedWith (theme::divider, 0.5f)); g.fillRoundedRectangle (r, 2.5f);
-        if (! clipped) { g.setColour (theme::divider); g.drawRoundedRectangle (r, 2.5f, 1.f); }
+        const float gap = 3.f, bw = ((float) getWidth() - gap) / 2.f, d = juce::jmin (bw, 8.f);
+        const int n = mono ? 1 : 2;
+        for (int c = 0; c < n; ++c)
+        {
+            const float cx = mono ? (float) getWidth() * 0.5f : (bw + gap) * (float) c + bw * 0.5f;
+            const bool on = mono ? (clipped[0] || clipped[1]) : clipped[c];
+            const auto r = juce::Rectangle<float> (d, d).withCentre ({ cx, (float) getHeight() * 0.5f });
+            g.setColour (on ? juce::Colour (0xffef4444) : theme::divider); g.fillEllipse (r);
+        }
     }
     void mouseUp (const juce::MouseEvent& e) override { if (contains (e.getPosition()) && onReset) onReset(); }
     void mouseEnter (const juce::MouseEvent&) override { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
 private:
-    bool clipped = false;
+    bool clipped[2] { false, false };
 };
 
 // The round "+" at the bottom of the sidebar: opens the Add a profile screen.

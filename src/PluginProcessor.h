@@ -86,7 +86,7 @@ public:
     GraphData getGraph() const { juce::SpinLock::ScopedLockType sl (graphLock); return graph; }
     int getGraphVersion() const { return graphVersion.load(); }
     juce::AudioProcessorValueTreeState apvts;
-    std::atomic<bool> inClipped { false }, outClipped { false };   // sticky: set when a peak reaches 0 dBFS, cleared by the user (click on the clip light)
+    std::array<std::atomic<bool>, 2> inClipped { false, false }, outClipped { false, false };   // per channel, sticky: set when a peak reaches 0 dBFS, cleared by the user (click on the clip lights)
     std::array<std::atomic<float>, 2> inPeak { { 0.f, 0.f } }, outPeak { { 0.f, 0.f } };   // linear peak per channel, for the meters
     double getSampleRate_() const { return sampleRateAtomic.load(); }
 

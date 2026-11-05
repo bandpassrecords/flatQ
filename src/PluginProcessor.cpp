@@ -580,12 +580,12 @@ void FlatQProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const bool skipForExport = apvts.getRawParameterValue ("bypassexport")->load() > 0.5f && isNonRealtime();
     if (nch == 2 && ! skipForExport && apvts.getRawParameterValue ("swap")->load() > 0.5f)   // input L/R swap
         std::swap_ranges (buffer.getWritePointer (0), buffer.getWritePointer (0) + n, buffer.getWritePointer (1));
-    auto peakOf = [&] (std::array<std::atomic<float>, 2>& m, std::atomic<bool>& clipFlag)
+    auto peakOf = [&] (std::array<std::atomic<float>, 2>& m, std::array<std::atomic<bool>, 2>& clipFlag)
     {
         for (int c = 0; c < nch; ++c)
         {
             const float pk = buffer.getMagnitude (c, 0, n);
-            if (pk >= 0.9999f) clipFlag = true;
+            if (pk >= 0.9999f) clipFlag[(size_t) c] = true;
             const float old = m[(size_t) c].load();
             m[(size_t) c] = pk > old ? pk : old * 0.92f;   // instant attack, smooth release (per block)
         }
